@@ -368,11 +368,15 @@ async def call_ai_api(image_path: str, api_key: str) -> dict:
     mime_type = mime_map.get(ext, "image/png")
 
     # Auto-detect API type: OpenAI-compatible if URL contains /v1 or API key is set
+    # Strip trailing /v1 to avoid duplicate path segments
+    base_url = ai_api_url.rstrip("/")
+    if base_url.endswith("/v1"):
+        base_url = base_url[:-3]
     is_openai_compat = "/v1" in ai_api_url or bool(api_key)
 
     if is_openai_compat:
         # OpenAI-compatible endpoint (llama.cpp, vLLM, etc.)
-        endpoint_url = f"{ai_api_url.rstrip('/')}/v1/chat/completions"
+        endpoint_url = f"{base_url}/v1/chat/completions"
         payload = {
             "model": ai_model,
             "messages": [
