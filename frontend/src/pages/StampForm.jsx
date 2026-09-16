@@ -23,7 +23,9 @@ function StampForm() {
   })
 
   const [imageFile, setImageFile] = useState(null)
+  const [rotatedFile, setRotatedFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
+  const [rotation, setRotation] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
@@ -74,8 +76,65 @@ function StampForm() {
     }
   }
 
+  const rotateImage = async (degrees) => {
+    const img = new Image()
+    img.src = imagePreview
+    await new Promise((resolve) => {
+      img.onload = resolve
+    })
+
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+
+    const rad = (degrees * Math.PI) / 180
+    const shouldSwapDimensions = Math.abs(degrees) === 90 || Math.abs(degrees) === 270
+
+    if (shouldSwapDimensions) {
+      canvas.width = img.height
+      canvas.height = img.width
+    } else {
+      canvas.width = img.width
+      canvas.height = img.height
+    }
+
+    ctx.translate(canvas.width / 2, canvas.height / 2)
+    ctx.rotate(rad)
+    ctx.drawImage(img, -img.width / 2, -img.height / 2)
+
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const newFile = new File([blob], imageFile.name, { type: imageFile.type })
+        const newUrl = URL.createObjectURL(newFile)
+        setRotatedFile(newFile)
+        setImagePreview(newUrl)
+      }
+    }, imageFile.type, 0.9)
+  }
+
+  const handleRotateLeft = () => {
+    const newRotation = (rotation - 90 + 360) % 360
+    rotateImage(-90).then(() => setRotation(newRotation))
+  }
+
+  const handleRotateRight = () => {
+    const newRotation = (rotation + 90) % 360
+    rotateImage(90).then(() => setRotation(newRotation))
+  }
+
+  const handleResetImage = () => {
+    setRotation(0)
+    setRotatedFile(null)
+    setImagePreview(null)
+    setImageFile(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
   const processFile = (file) => {
     if (file && file.type.startsWith('image/')) {
+      setRotation(0)
+      setRotatedFile(null)
       setImageFile(file)
       setImagePreview(URL.createObjectURL(file))
     }
@@ -190,7 +249,8 @@ function StampForm() {
     if (form.sentiments) formData.append('sentiments', form.sentiments)
     if (form.location) formData.append('location', form.location)
     if (form.price) formData.append('price', form.price)
-    if (imageFile) formData.append('image', imageFile)
+    if (rotatedFile) formData.append('image', rotatedFile)
+    else if (imageFile) formData.append('image', imageFile)
 
     try {
       const url = isEdit ? `/api/stamps/${id}` : '/api/stamps'
@@ -249,14 +309,37 @@ function StampForm() {
             />
           </div>
           {imageFile && (
-            <button
-              type="button"
-              className="btn btn-secondary analyze-btn"
-              onClick={handleAnalyzeImage}
-              disabled={analyzing}
-            >
-              {analyzing ? 'Analyzing...' : '✨ Analyze Image'}
-            </button>
+            <div className="image-actions">
+              <button
+                type="button"
+                className="btn btn-secondary rotate-btn"
+                onClick={handleRotateLeft}
+              >
+                ↺ Rotate Left
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary rotate-btn"
+                onClick={handleRotateRight}
+              >
+                ↻ Rotate Right
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger reset-btn"
+                onClick={handleResetImage}
+              >
+                Remove Image
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary analyze-btn"
+                onClick={handleAnalyzeImage}
+                disabled={analyzing}
+              >
+                {analyzing ? 'Analyzing...' : '✨ Analyze Image'}
+              </button>
+            </div>
           )}
           {aiError && <div className="error">{aiError}</div>}
         </div>
