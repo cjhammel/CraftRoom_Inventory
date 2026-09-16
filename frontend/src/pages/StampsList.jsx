@@ -11,6 +11,7 @@ function StampsList() {
   const [brand, setBrand] = useState('')
   const [productType, setProductType] = useState('')
   const [location, setLocation] = useState('')
+  const [sentiments, setSentiments] = useState('')
   const [error, setError] = useState(null)
 
   useEffect(() => {
@@ -26,6 +27,7 @@ function StampsList() {
       if (brand) params.set('brand_name', brand)
       if (productType) params.set('product_type', productType)
       if (location) params.set('location', location)
+      if (sentiments) params.set('sentiments', sentiments)
 
       const url = `/api/stamps${params.toString() ? '?' + params.toString() : ''}`
       const response = await fetch(url)
@@ -81,6 +83,12 @@ function StampsList() {
           value={location}
           onChange={(e) => setLocation(e.target.value)}
         />
+        <input
+          type="text"
+          placeholder="Filter by sentiments..."
+          value={sentiments}
+          onChange={(e) => setSentiments(e.target.value)}
+        />
         <button type="submit" className="btn btn-primary">
           Search
         </button>
@@ -90,7 +98,7 @@ function StampsList() {
         <div className="empty-state">
           <h2>No stamps found</h2>
           <p>
-            {search || brand || productType || location
+            {search || brand || productType || location || sentiments
               ? 'Try adjusting your filters'
               : 'Add your first stamp to get started!'}
           </p>
