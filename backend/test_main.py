@@ -167,12 +167,20 @@ def test_update_stamp_404(client):
     assert response.status_code == 404
 
 
-def test_ai_analyze_not_configured(client):
+def test_ai_analyze_not_configured(client, monkeypatch):
+    """Verify 501 is returned when AI_API_URL is not set."""
+    monkeypatch.delenv("AI_API_URL", raising=False)
+    monkeypatch.delenv("AI_API_KEY", raising=False)
+    monkeypatch.delenv("AI_MODEL", raising=False)
+    monkeypatch.delenv("AI_PROMPT", raising=False)
     response = client.post(
         "/ai/analyze-image",
         files={"image": ("test.png", b"fake image data", "image/png")},
     )
     assert response.status_code == 501
+    body = response.json()
+    assert "message" in body["detail"]
+    assert "AI_API_URL" in body["detail"]["message"]
 
 
 def test_create_stamp_with_retired(client):

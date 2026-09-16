@@ -2,8 +2,15 @@ import os
 import logging
 import shutil
 from typing import Optional
+from pathlib import Path
+from dotenv import load_dotenv
 
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Query, Form
+
+# Load .env file
+_env_path = Path(__file__).resolve().parents[1] / ".env"
+if _env_path.exists():
+    load_dotenv(_env_path)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
