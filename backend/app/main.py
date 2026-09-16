@@ -344,10 +344,10 @@ async def analyze_image(
 
 
 async def call_ai_api(image_path: str, api_key: str) -> dict:
-    """Call llama.cpp / Ollama-compatible API to analyze stamp image.
+    """Call Ollama or llama.cpp-compatible API to analyze stamp image.
 
-    Uses the Ollama /api/chat endpoint with multimodal support.
-    Compatible with llama.cpp servers exposing Ollama-compatible API.
+    Supports both Ollama /api/chat and OpenAI-compatible /v1/chat/completions
+    endpoints. Auto-detects based on AI_API_URL path or AI_API_KEY presence.
     """
     import httpx
 
@@ -367,24 +367,49 @@ async def call_ai_api(image_path: str, api_key: str) -> dict:
     mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
     mime_type = mime_map.get(ext, "image/png")
 
-    # Ollama-compatible chat API payload
-    payload = {
-        "model": ai_model,
-        "messages": [
-            {
-                "role": "user",
-                "content": ai_prompt,
-                "images": [image_data],
-            }
-        ],
-        "stream": False,
-    }
+    # Auto-detect API type: OpenAI-compatible if URL contains /v1 or API key is set
+    is_openai_compat = "/v1" in ai_api_url or bool(api_key)
+
+    if is_openai_compat:
+        # OpenAI-compatible endpoint (llama.cpp, vLLM, etc.)
+        endpoint_url = f"{ai_api_url.rstrip('/')}/v1/chat/completions"
+        payload = {
+            "model": ai_model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": ai_prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{image_data}"}},
+                    ],
+                }
+            ],
+            "max_tokens": 1000,
+            "stream": False,
+        }
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    else:
+        # Ollama /api/chat endpoint
+        endpoint_url = f"{ai_api_url.rstrip('/')}/api/chat"
+        payload = {
+            "model": ai_model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": ai_prompt,
+                    "images": [image_data],
+                }
+            ],
+            "stream": False,
+        }
+        headers = {}
 
     try:
         async with httpx.AsyncClient(timeout=120) as client:
             response = await client.post(
-                f"{ai_api_url.rstrip('/')}/api/chat",
+                endpoint_url,
                 json=payload,
+                headers=headers,
             )
             response.raise_for_status()
             result = response.json()
@@ -396,7 +421,10 @@ async def call_ai_api(image_path: str, api_key: str) -> dict:
         raise
 
     # Parse AI response and extract suggestions
-    content = result.get("message", {}).get("content", "")
+    if is_openai_compat:
+        content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+    else:
+        content = result.get("message", {}).get("content", "")
     if not content:
         logger.warning("AI API returned empty content")
         return {}
