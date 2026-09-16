@@ -354,7 +354,7 @@ async def call_ai_api(image_path: str, api_key: str) -> dict:
 
     ai_api_url = os.getenv("AI_API_URL", "http://example.com:11434")
     ai_model = os.getenv("AI_MODEL", "qwen3.6:35B")
-    ai_prompt = os.getenv("AI_PROMPT", "Analyze this stamp image and return product_name, brand_name, product_type, theme, shape_descriptor, sentiments as JSON.")
+    ai_prompt = os.getenv("AI_PROMPT", "Analyze this stamp image and return a JSON object with these exact keys: product_name, brand_name, product_type, theme, shape_descriptor, sentiments. Use null for unknown fields. Example: {\"product_name\": \"Test\", \"brand_name\": null, \"product_type\": null, \"theme\": null, \"shape_descriptor\": null, \"sentiments\": null}. Return ONLY valid JSON, no markdown, no explanation.")
 
     logger.info(f"Calling AI API: {ai_api_url} with model {ai_model}")
 
@@ -410,38 +410,58 @@ async def call_ai_api(image_path: str, api_key: str) -> dict:
         }
         headers = {}
 
-    try:
-        async with httpx.AsyncClient(timeout=120) as client:
-            response = await client.post(
-                endpoint_url,
-                json=payload,
-                headers=headers,
-            )
-            response.raise_for_status()
-            result = response.json()
-    except httpx.HTTPError as e:
-        logger.error(f"HTTP error calling AI API: {e}")
-        raise
-    except Exception as e:
-        logger.error(f"Error calling AI API: {e}", exc_info=True)
-        raise
+    import asyncio
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            async with httpx.AsyncClient(timeout=120) as client:
+                response = await client.post(
+                    endpoint_url,
+                    json=payload,
+                    headers=headers,
+                )
+                response.raise_for_status()
+                result = response.json()
+                if result.get("choices", [{}])[0].get("message", {}).get("content"):
+                    break
+                if attempt < max_retries - 1:
+                    logger.warning(f"AI returned empty content on attempt {attempt + 1}, retrying...")
+                    await asyncio.sleep(1)
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP error calling AI API (attempt {attempt + 1}): {e}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(1)
+                continue
+            raise
+        except Exception as e:
+            logger.error(f"Error calling AI API (attempt {attempt + 1}): {e}", exc_info=True)
+            if attempt < max_retries - 1:
+                await asyncio.sleep(1)
+                continue
+            raise
 
     # Parse AI response and extract suggestions
     if is_openai_compat:
         content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+        finish_reason = result.get("choices", [{}])[0].get("finish_reason", "unknown")
     else:
         content = result.get("message", {}).get("content", "")
+        finish_reason = result.get("done", False)
+    
+    logger.debug(f"AI raw response content length: {len(content)}, finish_reason: {finish_reason}")
+    logger.debug(f"AI full response: {result}")
+    
     if not content:
         logger.warning("AI API returned empty content")
-        logger.debug("Full AI response: %s", result)
         return {}
 
     import json
     try:
         suggestions = json.loads(content)
         logger.info(f"AI analysis successful: extracted {len(suggestions)} fields")
-    except json.JSONDecodeError:
-        logger.warning("AI API returned non-JSON content, attempting to extract from markdown")
+    except json.JSONDecodeError as e:
+        logger.warning(f"AI API returned non-JSON content, attempting to extract from markdown. Error: {e}")
+        logger.debug(f"AI content that failed to parse: {content[:500]}")
         # Try to extract JSON from markdown code blocks
         import re
         match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, re.DOTALL)
