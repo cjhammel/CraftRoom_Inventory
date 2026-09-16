@@ -1,4 +1,4 @@
-# CraftRoom Stamp Inventory
+# CraftRoom Product Inventory
 
 A lightweight web application to inventory craft stamps. Built with FastAPI (backend) and React + Vite (frontend).
 
@@ -113,6 +113,8 @@ To enable AI analysis:
 4. Set `AI_API_KEY` if your server requires authentication
 
 The app uses the Ollama-compatible `/api/chat` endpoint with multimodal (image) support.
+
+You can also open **Configuration** in the app header to set a browser-specific local AI server URL and custom prompt. Those settings are sent with image analysis requests and override the backend `.env` values for that browser.
 
 ## Running Tests
 

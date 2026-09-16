@@ -7,7 +7,9 @@ from typing import Optional
 
 logger = logging.getLogger("craftroom")
 
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
+_BACKEND_DIR = os.path.dirname(os.path.dirname(__file__))
+_upload_dir = os.getenv("UPLOAD_DIR", "uploads")
+UPLOAD_DIR = _upload_dir if os.path.isabs(_upload_dir) else os.path.join(_BACKEND_DIR, _upload_dir)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}

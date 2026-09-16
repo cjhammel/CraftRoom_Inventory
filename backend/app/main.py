@@ -37,7 +37,7 @@ from app.schemas import StampCreate, StampUpdate, StampResponse, AIAnalysisReque
 from app.crud import get_stamp, get_stamps, create_stamp, update_stamp, delete_stamp
 from app.image_utils import validate_image_file, generate_safe_filename, resize_image, UPLOAD_DIR
 
-app = FastAPI(title="CraftRoom Stamp Inventory")
+app = FastAPI(title="CraftRoom Product Inventory")
 
 # CORS
 FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")
@@ -56,7 +56,7 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 @app.on_event("startup")
 def startup():
-    logger.info("Starting CraftRoom Stamp Inventory backend")
+    logger.info("Starting CraftRoom Product Inventory backend")
     logger.info(f"Database URL: {os.getenv('DATABASE_URL', 'using default')}")
     logger.info(f"Upload directory: {UPLOAD_DIR}")
     logger.info(f"AI API URL: {os.getenv('AI_API_URL', 'using default')}")
@@ -300,15 +300,19 @@ def delete_stamp_endpoint(stamp_id: int, db: Session = Depends(get_db)):
 @app.post("/ai/analyze-image")
 async def analyze_image(
     image: UploadFile = File(...),
+    ai_api_url: Optional[str] = Form(None),
+    ai_prompt: Optional[str] = Form(None),
 ):
     logger.info(f"AI image analysis requested: {image.filename}")
-    ai_api_url = os.getenv("AI_API_URL")
-    if not ai_api_url:
+    request_ai_api_url = ai_api_url.strip() if ai_api_url else ""
+    effective_ai_api_url = request_ai_api_url or (os.getenv("AI_API_URL") or "").strip()
+    effective_ai_prompt = (ai_prompt or os.getenv("AI_PROMPT") or "").strip() or None
+    if not effective_ai_api_url:
         logger.warning("AI analysis requested but AI_API_URL not configured")
         raise HTTPException(
             status_code=501,
             detail={
-                "message": "AI service is not configured. Set AI_API_URL in your .env file to enable image analysis.",
+                "message": "AI service is not configured. Set AI_API_URL in your .env file or the app configuration menu to enable image analysis.",
                 "suggestions": {},
             },
         )
@@ -321,7 +325,7 @@ async def analyze_image(
             detail=f"Unsupported image type: .{bad_ext.lstrip('.')}. Supported: jpg, jpeg, png, webp",
         )
 
-    ai_api_key = os.getenv("AI_API_KEY", "")
+    ai_api_key = "" if request_ai_api_url else os.getenv("AI_API_KEY", "")
 
     # Save temporarily for AI processing
     temp_path = os.path.join(UPLOAD_DIR, f"temp_ai_{generate_safe_filename(image.filename)}")
@@ -331,7 +335,7 @@ async def analyze_image(
 
     try:
         logger.info(f"Calling AI API with model: {os.getenv('AI_MODEL')}")
-        suggestions = await call_ai_api(temp_path, ai_api_key)
+        suggestions = await call_ai_api(temp_path, ai_api_key, effective_ai_api_url, effective_ai_prompt)
         logger.info(f"AI analysis completed successfully")
         return {"suggestions": suggestions}
     except Exception as e:
@@ -345,7 +349,12 @@ async def analyze_image(
                 logger.error(f"Error cleaning up temp AI file: {e}")
 
 
-async def call_ai_api(image_path: str, api_key: str) -> dict:
+async def call_ai_api(
+    image_path: str,
+    api_key: str,
+    ai_api_url: Optional[str] = None,
+    ai_prompt: Optional[str] = None,
+) -> dict:
     """Call Ollama or llama.cpp-compatible API to analyze stamp image.
 
     Supports both Ollama /api/chat and OpenAI-compatible /v1/chat/completions
@@ -353,9 +362,9 @@ async def call_ai_api(image_path: str, api_key: str) -> dict:
     """
     import httpx
 
-    ai_api_url = os.getenv("AI_API_URL", "http://example.com:11434")
+    ai_api_url = ai_api_url or os.getenv("AI_API_URL", "http://example.com:11434")
     ai_model = os.getenv("AI_MODEL", "qwen3.6:35B")
-    ai_prompt = os.getenv("AI_PROMPT", "Analyze this stamp image and return a JSON object with these exact keys: product_name, brand_name, product_type, theme, shape_descriptor, sentiments. Use null for unknown fields. Example: {\"product_name\": \"Test\", \"brand_name\": null, \"product_type\": null, \"theme\": null, \"shape_descriptor\": null, \"sentiments\": null}. Return ONLY valid JSON, no markdown, no explanation.")
+    ai_prompt = ai_prompt or os.getenv("AI_PROMPT", "Analyze this stamp image and return a JSON object with these exact keys: product_name, brand_name, product_type, theme, shape_descriptor, sentiments. Use null for unknown fields. Example: {\"product_name\": \"Test\", \"brand_name\": null, \"product_type\": null, \"theme\": null, \"shape_descriptor\": null, \"sentiments\": null}. Return ONLY valid JSON, no markdown, no explanation.")
 
     logger.info(f"Calling AI API: {ai_api_url} with model {ai_model}")
 

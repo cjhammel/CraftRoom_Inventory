@@ -311,7 +311,7 @@ def test_ai_analyze_with_mock_response(client, monkeypatch):
     import json
     import asyncio
 
-    async def mock_call_ai_api(image_path, api_key):
+    async def mock_call_ai_api(image_path, api_key, ai_api_url=None, ai_prompt=None):
         return {
             "product_name": "Mocked Stamp",
             "brand_name": "Mock Brand",
@@ -345,3 +345,43 @@ def test_ai_analyze_with_mock_response(client, monkeypatch):
     assert "suggestions" in body
     assert body["suggestions"]["product_name"] == "Mocked Stamp"
     assert body["suggestions"]["brand_name"] == "Mock Brand"
+
+
+def test_ai_analyze_uses_request_configuration(client, monkeypatch):
+    """Verify AI settings submitted from the app configuration menu are used."""
+    captured = {}
+
+    async def mock_call_ai_api(image_path, api_key, ai_api_url=None, ai_prompt=None):
+        captured["api_key"] = api_key
+        captured["ai_api_url"] = ai_api_url
+        captured["ai_prompt"] = ai_prompt
+        return {"product_name": "Configured Stamp"}
+
+    from app import main
+    monkeypatch.setattr(main, "call_ai_api", mock_call_ai_api)
+    monkeypatch.delenv("AI_API_URL", raising=False)
+    monkeypatch.setenv("AI_API_KEY", "server-secret")
+    monkeypatch.delenv("AI_PROMPT", raising=False)
+
+    import io
+    from PIL import Image
+
+    img = Image.new("RGB", (10, 10), color="green")
+    img_buffer = io.BytesIO()
+    img.save(img_buffer, format="JPEG")
+    img_buffer.seek(0)
+
+    response = client.post(
+        "/ai/analyze-image",
+        data={
+            "ai_api_url": "http://localhost:11434",
+            "ai_prompt": "Return stamp metadata as JSON.",
+        },
+        files={"image": ("test_stamp.jpg", img_buffer, "image/jpeg")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["suggestions"]["product_name"] == "Configured Stamp"
+    assert captured["api_key"] == ""
+    assert captured["ai_api_url"] == "http://localhost:11434"
+    assert captured["ai_prompt"] == "Return stamp metadata as JSON."

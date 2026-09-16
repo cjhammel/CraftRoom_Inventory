@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { AI_API_URL_KEY, AI_PROMPT_KEY } from './Settings'
 import '../App.css'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -180,6 +181,10 @@ function StampForm() {
 
     const formData = new FormData()
     formData.append('image', imageFile)
+    const aiApiUrl = localStorage.getItem(AI_API_URL_KEY)
+    const aiPrompt = localStorage.getItem(AI_PROMPT_KEY)
+    if (aiApiUrl) formData.append('ai_api_url', aiApiUrl)
+    if (aiPrompt) formData.append('ai_prompt', aiPrompt)
 
     try {
       const response = await fetch('/api/ai/analyze-image', {

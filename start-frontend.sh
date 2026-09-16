@@ -10,7 +10,7 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FRONTEND_DIR="$SCRIPT_DIR/frontend"
 
-echo -e "${GREEN}🚀 Starting CraftRoom Stamp Inventory Frontend${NC}"
+echo -e "${GREEN}🚀 Starting CraftRoom Product Inventory Frontend${NC}"
 
 # Check if frontend directory exists
 if [ ! -d "$FRONTEND_DIR" ]; then
