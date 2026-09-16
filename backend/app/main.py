@@ -389,6 +389,7 @@ async def call_ai_api(image_path: str, api_key: str) -> dict:
                 }
             ],
             "max_tokens": 1000,
+            "temperature": 0,
             "stream": False,
         }
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
@@ -431,6 +432,7 @@ async def call_ai_api(image_path: str, api_key: str) -> dict:
         content = result.get("message", {}).get("content", "")
     if not content:
         logger.warning("AI API returned empty content")
+        logger.debug("Full AI response: %s", result)
         return {}
 
     import json
