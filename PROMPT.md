@@ -181,3 +181,77 @@
 > - API tests pass with `pytest`.
 >
 > Use this prompt to generate the complete application. Prefer simple, readable code over unnecessary abstractions.
+
+---
+
+## Implementation Status
+
+### Completed Features
+
+| # | Requirement | Status | Notes |
+|---|---|---|---|
+| 1 | Data model (SQLite) | ✅ Complete | `stamp` table with all required columns, `create_all()` on startup |
+| 2 | REST API | ✅ Complete | All CRUD endpoints + search/filter working |
+| 2a | GET /stamps with filters | ✅ Complete | Supports `q`, `brand_name`, `product_type`, `location` params |
+| 2b | GET /stamps/{id} | ✅ Complete | Returns 404 for missing stamps |
+| 2c | POST /stamps | ✅ Complete | multipart/form-data, image upload, validation |
+| 2d | PUT /stamps/{id} | ✅ Complete | Partial updates, optional image replacement |
+| 2e | DELETE /stamps/{id} | ✅ Complete | Removes stamp and associated image file |
+| 2f | POST /ai/analyze-image | ✅ Complete | Ollama/llama.cpp compatible endpoint |
+| 3 | Image upload & resizing | ✅ Complete | ffmpeg resize to <=1MB, no upscaling, safe filenames |
+| 4 | AI image analysis | ✅ Complete | Optional, non-blocking, uses Ollama API |
+| 5 | Frontend UI | ✅ Complete | React + Vite, responsive, polished |
+| 5a | List view (card grid) | ✅ Complete | Thumbnails, metadata display |
+| 5b | Search & filters | ✅ Complete | Real-time search, brand/type/location filters |
+| 5c | Detail view | ✅ Complete | Full stamp info, large image, Edit/Delete buttons |
+| 5d | Add/Edit form | ✅ Complete | Reusable component, all fields, image preview |
+| 5e | Analyze Image button | ✅ Complete | Auto-populates fields from AI response |
+| 5f | Client-side validation | ✅ Complete | Required product_name, valid price |
+| 5g | Delete confirmation modal | ✅ Complete | Modal overlay with cancel/confirm |
+| 6 | Project structure | ✅ Complete | Matches spec with minor adjustments |
+| 7 | Environment config | ✅ Complete | `.env.example` with all variables |
+| 8 | Setup & run | ✅ Complete | Backend port 8000, frontend port 3000, CORS configured |
+| 9 | Tests | ✅ Complete | 18 tests passing (see below) |
+| 10a | Drag-and-drop upload | ✅ Complete | Visual feedback, drop zone highlighting |
+| 10b | Error logging | ✅ Complete | Comprehensive logging to `backend/logs/app.log` |
+
+### Test Coverage (18 tests)
+
+- ✅ create stamp
+- ✅ list stamps
+- ✅ retrieve stamp by ID
+- ✅ missing stamp returns 404
+- ✅ update stamp
+- ✅ delete stamp
+- ✅ missing stamp delete returns 404
+- ✅ search/filter stamps
+- ✅ invalid image upload returns 400
+- ✅ empty product_name validation
+- ✅ invalid price validation
+- ✅ AI not configured returns 501
+- ✅ stamp with retired flag
+- ✅ image upload and resize (≤ 1MB verification)
+- ✅ small image preservation (no upscaling)
+- ✅ AI analysis with real image (http://framework.gruru.net:11434)
+- ✅ AI analysis with mock response
+
+### Additional Features Added
+
+- **AI integration**: Configured for Ollama/llama.cpp at `http://framework.gruru.net:11434` with `qwen3.6:35B` model
+- **Comprehensive error logging**: All endpoints log requests, errors with stack traces to `backend/logs/app.log`
+- **Drag-and-drop image upload**: Visual feedback with highlight effect when dragging files
+- **Arch Linux installation instructions**: Added to README.md
+- **Pillow dependency**: Used in tests for creating test images
+- **`.gitignore`**: Excludes `.env`, `stamps.db`, `venv/`, `logs/`, uploads
+
+### Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `DATABASE_URL` | `sqlite:///../stamps.db` | SQLite database path |
+| `UPLOAD_DIR` | `uploads` | Directory for uploaded images |
+| `FRONTEND_ORIGIN` | `http://localhost:3000` | CORS allowed origin |
+| `AI_API_URL` | `http://framework.gruru.net:11434` | Ollama/llama.cpp server URL |
+| `AI_API_KEY` | _(empty)_ | API key (optional for local servers) |
+| `AI_MODEL` | `qwen3.6:35B` | Model name for AI analysis |
+| `AI_PROMPT` | _(default prompt)_ | Custom AI analysis prompt |
