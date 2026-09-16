@@ -326,12 +326,18 @@ body {
   padding: 24px;
   text-align: center;
   cursor: pointer;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, background-color 0.2s, transform 0.2s;
   margin-bottom: 16px;
 }
 
 .image-upload-area:hover {
   border-color: #3498db;
+}
+
+.image-upload-area.drag-over {
+  border-color: #3498db;
+  background-color: rgba(52, 152, 219, 0.1);
+  transform: scale(1.02);
 }
 
 .image-preview {

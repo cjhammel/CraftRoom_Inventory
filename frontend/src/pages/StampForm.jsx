@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import '../App.css'
 
@@ -8,6 +8,7 @@ function StampForm() {
   const { id } = useParams()
   const navigate = useNavigate()
   const isEdit = !!id
+  const fileInputRef = useRef(null)
 
   const [form, setForm] = useState({
     product_name: '',
@@ -23,6 +24,7 @@ function StampForm() {
 
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
+  const [isDragging, setIsDragging] = useState(false)
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
@@ -72,11 +74,43 @@ function StampForm() {
     }
   }
 
-  const handleImageChange = (e) => {
-    const file = e.target.files[0]
-    if (file) {
+  const processFile = (file) => {
+    if (file && file.type.startsWith('image/')) {
       setImageFile(file)
       setImagePreview(URL.createObjectURL(file))
+    }
+  }
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0]
+    processFile(file)
+  }
+
+  const handleDragEnter = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+  }
+
+  const handleDragOver = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  const handleDrop = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+
+    const files = e.dataTransfer.files
+    if (files && files.length > 0) {
+      processFile(files[0])
     }
   }
 
@@ -192,13 +226,21 @@ function StampForm() {
         {/* Image upload section */}
         <div className="form-group">
           <label>Image</label>
-          <div className="image-upload-area" onClick={() => document.getElementById('image-input').click()}>
+          <div
+            className={`image-upload-area ${isDragging ? 'drag-over' : ''}`}
+            onClick={() => fileInputRef.current?.click()}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+          >
             {imagePreview ? (
               <img src={imagePreview} alt="Preview" className="image-preview" />
             ) : (
-              <p>Click to upload an image</p>
+              <p>{isDragging ? 'Drop image here' : 'Click or drag an image here'}</p>
             )}
             <input
+              ref={fileInputRef}
               id="image-input"
               type="file"
               accept="image/jpeg,image/jpg,image/png,image/webp"
