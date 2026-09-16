@@ -11,7 +11,7 @@ def get_stamps(
     db: Session,
     search: Optional[str] = None,
     brand_name: Optional[str] = None,
-    product_type: Optional[str] = None,
+    theme: Optional[str] = None,
     location: Optional[str] = None,
     sentiments: Optional[str] = None,
 ) -> List[Stamp]:
@@ -26,8 +26,8 @@ def get_stamps(
     if brand_name:
         query = query.filter(Stamp.brand_name.ilike(f"%{brand_name}%"))
 
-    if product_type:
-        query = query.filter(Stamp.product_type.ilike(f"%{product_type}%"))
+    if theme:
+        query = query.filter(Stamp.theme.ilike(f"%{theme}%"))
 
     if location:
         query = query.filter(Stamp.location.ilike(f"%{location}%"))

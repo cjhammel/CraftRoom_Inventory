@@ -9,7 +9,7 @@ function StampsList() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [brand, setBrand] = useState('')
-  const [productType, setProductType] = useState('')
+  const [theme, setTheme] = useState('')
   const [location, setLocation] = useState('')
   const [sentiments, setSentiments] = useState('')
   const [error, setError] = useState(null)
@@ -25,7 +25,7 @@ function StampsList() {
       const params = new URLSearchParams()
       if (search) params.set('q', search)
       if (brand) params.set('brand_name', brand)
-      if (productType) params.set('product_type', productType)
+      if (theme) params.set('theme', theme)
       if (location) params.set('location', location)
       if (sentiments) params.set('sentiments', sentiments)
 
@@ -73,9 +73,9 @@ function StampsList() {
         />
         <input
           type="text"
-          placeholder="Filter by type..."
-          value={productType}
-          onChange={(e) => setProductType(e.target.value)}
+          placeholder="Filter by theme..."
+          value={theme}
+          onChange={(e) => setTheme(e.target.value)}
         />
         <input
           type="text"
@@ -92,13 +92,26 @@ function StampsList() {
         <button type="submit" className="btn btn-primary">
           Search
         </button>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => {
+            setSearch('')
+            setBrand('')
+            setTheme('')
+            setLocation('')
+            setSentiments('')
+          }}
+        >
+          Clear
+        </button>
       </form>
 
       {stamps.length === 0 ? (
         <div className="empty-state">
           <h2>No stamps found</h2>
           <p>
-            {search || brand || productType || location || sentiments
+            {search || brand || theme || location || sentiments
               ? 'Try adjusting your filters'
               : 'Add your first stamp to get started!'}
           </p>

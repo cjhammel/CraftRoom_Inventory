@@ -71,14 +71,14 @@ def startup():
 def list_stamps(
     q: Optional[str] = Query(None),
     brand_name: Optional[str] = Query(None),
-    product_type: Optional[str] = Query(None),
+    theme: Optional[str] = Query(None),
     location: Optional[str] = Query(None),
     sentiments: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     try:
-        stamps = get_stamps(db, search=q, brand_name=brand_name, product_type=product_type, location=location, sentiments=sentiments)
-        logger.info(f"Listed {len(stamps)} stamps (q={q}, brand={brand_name}, type={product_type}, loc={location}, sentiments={sentiments})")
+        stamps = get_stamps(db, search=q, brand_name=brand_name, theme=theme, location=location, sentiments=sentiments)
+        logger.info(f"Listed {len(stamps)} stamps (q={q}, brand={brand_name}, theme={theme}, loc={location}, sentiments={sentiments})")
         return stamps
     except Exception as e:
         logger.error(f"Error listing stamps: {e}", exc_info=True)
