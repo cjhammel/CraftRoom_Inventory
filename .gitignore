@@ -25,3 +25,6 @@ backend/uploads/*
 # IDE
 .vscode/
 .idea/
+
+# Logs
+backend/logs/

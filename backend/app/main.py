@@ -1,4 +1,5 @@
 import os
+import logging
 import shutil
 from typing import Optional
 
@@ -7,6 +8,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
+
+# Configure logging
+LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+LOG_FILE = os.path.join(LOG_DIR, "app.log")
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler(LOG_FILE),
+        logging.StreamHandler(),
+    ],
+)
+logger = logging.getLogger("craftroom")
 
 from app.database import get_db, init_db
 from app.models import Stamp
@@ -33,7 +49,12 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 @app.on_event("startup")
 def startup():
+    logger.info("Starting CraftRoom Stamp Inventory backend")
+    logger.info(f"Database URL: {os.getenv('DATABASE_URL', 'using default')}")
+    logger.info(f"Upload directory: {UPLOAD_DIR}")
+    logger.info(f"AI API URL: {os.getenv('AI_API_URL', 'using default')}")
     init_db()
+    logger.info("Database initialized successfully")
 
 
 # --- Stamp CRUD endpoints ---
@@ -47,16 +68,29 @@ def list_stamps(
     location: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    stamps = get_stamps(db, search=q, brand_name=brand_name, product_type=product_type, location=location)
-    return stamps
+    try:
+        stamps = get_stamps(db, search=q, brand_name=brand_name, product_type=product_type, location=location)
+        logger.info(f"Listed {len(stamps)} stamps (q={q}, brand={brand_name}, type={product_type}, loc={location})")
+        return stamps
+    except Exception as e:
+        logger.error(f"Error listing stamps: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to list stamps")
 
 
 @app.get("/stamps/{stamp_id}", response_model=StampResponse)
 def get_stamp_by_id(stamp_id: int, db: Session = Depends(get_db)):
-    stamp = get_stamp(db, stamp_id)
-    if not stamp:
-        raise HTTPException(status_code=404, detail="Stamp not found")
-    return stamp
+    try:
+        stamp = get_stamp(db, stamp_id)
+        if not stamp:
+            logger.warning(f"Stamp not found: {stamp_id}")
+            raise HTTPException(status_code=404, detail="Stamp not found")
+        logger.info(f"Retrieved stamp: {stamp_id}")
+        return stamp
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving stamp {stamp_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve stamp")
 
 
 @app.post("/stamps", response_model=StampResponse)
@@ -73,8 +107,11 @@ async def create_stamp_endpoint(
     image: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
+    logger.info(f"Creating stamp: {product_name}")
+    
     # Validate product_name
     if not product_name or not product_name.strip():
+        logger.warning(f"Empty product_name received")
         raise HTTPException(status_code=400, detail="product_name is required and cannot be empty")
 
     # Validate price
@@ -82,6 +119,7 @@ async def create_stamp_endpoint(
         try:
             float(price)
         except ValueError:
+            logger.warning(f"Invalid price format: {price}")
             raise HTTPException(status_code=400, detail="price must be a valid decimal number")
 
     stamp_data = {
@@ -98,8 +136,10 @@ async def create_stamp_endpoint(
 
     # Handle image upload
     if image and image.filename:
+        logger.info(f"Processing image upload: {image.filename}")
         bad_ext = validate_image_file(image)
         if bad_ext:
+            logger.warning(f"Unsupported image type: {bad_ext} for file {image.filename}")
             raise HTTPException(
                 status_code=400,
                 detail=f"Unsupported image type: .{bad_ext.lstrip('.')}. Supported: jpg, jpeg, png, webp",
@@ -109,19 +149,31 @@ async def create_stamp_endpoint(
         input_path = os.path.join(UPLOAD_DIR, f"temp_{safe_filename}")
         output_path = os.path.join(UPLOAD_DIR, safe_filename)
 
-        # Save uploaded file
-        contents = await image.read()
-        with open(input_path, "wb") as f:
-            f.write(contents)
+        try:
+            # Save uploaded file
+            contents = await image.read()
+            with open(input_path, "wb") as f:
+                f.write(contents)
 
-        # Resize/compress with ffmpeg
-        resize_image(input_path, output_path)
-        os.remove(input_path)
+            # Resize/compress with ffmpeg
+            resize_image(input_path, output_path)
+            os.remove(input_path)
 
-        stamp_data["image_url"] = f"/uploads/{safe_filename}"
+            stamp_data["image_url"] = f"/uploads/{safe_filename}"
+            logger.info(f"Image processed and saved: {safe_filename}")
+        except Exception as e:
+            logger.error(f"Error processing image: {e}", exc_info=True)
+            if os.path.exists(input_path):
+                os.remove(input_path)
+            raise HTTPException(status_code=500, detail=f"Failed to process image: {str(e)}")
 
-    db_stamp = create_stamp(db, stamp_data)
-    return StampResponse.model_validate(db_stamp)
+    try:
+        db_stamp = create_stamp(db, stamp_data)
+        logger.info(f"Stamp created successfully with ID: {db_stamp.id}")
+        return StampResponse.model_validate(db_stamp)
+    except Exception as e:
+        logger.error(f"Error creating stamp in database: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to create stamp in database")
 
 
 @app.put("/stamps/{stamp_id}", response_model=StampResponse)
@@ -139,8 +191,10 @@ async def update_stamp_endpoint(
     image: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
+    logger.info(f"Updating stamp: {stamp_id}")
     stamp = get_stamp(db, stamp_id)
     if not stamp:
+        logger.warning(f"Stamp not found for update: {stamp_id}")
         raise HTTPException(status_code=404, detail="Stamp not found")
 
     stamp_data = {}
@@ -165,8 +219,10 @@ async def update_stamp_endpoint(
 
     # Handle image upload
     if image and image.filename:
+        logger.info(f"Processing image upload for stamp {stamp_id}: {image.filename}")
         bad_ext = validate_image_file(image)
         if bad_ext:
+            logger.warning(f"Unsupported image type: {bad_ext} for stamp {stamp_id}")
             raise HTTPException(
                 status_code=400,
                 detail=f"Unsupported image type: .{bad_ext.lstrip('.')}. Supported: jpg, jpeg, png, webp",
@@ -176,23 +232,37 @@ async def update_stamp_endpoint(
         input_path = os.path.join(UPLOAD_DIR, f"temp_{safe_filename}")
         output_path = os.path.join(UPLOAD_DIR, safe_filename)
 
-        contents = await image.read()
-        with open(input_path, "wb") as f:
-            f.write(contents)
+        try:
+            contents = await image.read()
+            with open(input_path, "wb") as f:
+                f.write(contents)
 
-        resize_image(input_path, output_path)
-        os.remove(input_path)
+            resize_image(input_path, output_path)
+            os.remove(input_path)
 
-        stamp_data["image_url"] = f"/uploads/{safe_filename}"
+            stamp_data["image_url"] = f"/uploads/{safe_filename}"
+            logger.info(f"Image updated for stamp {stamp_id}: {safe_filename}")
+        except Exception as e:
+            logger.error(f"Error processing image for stamp {stamp_id}: {e}", exc_info=True)
+            if os.path.exists(input_path):
+                os.remove(input_path)
+            raise HTTPException(status_code=500, detail=f"Failed to process image: {str(e)}")
 
-    updated = update_stamp(db, stamp_id, stamp_data)
-    return StampResponse.model_validate(updated)
+    try:
+        updated = update_stamp(db, stamp_id, stamp_data)
+        logger.info(f"Stamp {stamp_id} updated successfully")
+        return StampResponse.model_validate(updated)
+    except Exception as e:
+        logger.error(f"Error updating stamp {stamp_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to update stamp in database")
 
 
 @app.delete("/stamps/{stamp_id}")
 def delete_stamp_endpoint(stamp_id: int, db: Session = Depends(get_db)):
+    logger.info(f"Deleting stamp: {stamp_id}")
     stamp = get_stamp(db, stamp_id)
     if not stamp:
+        logger.warning(f"Stamp not found for deletion: {stamp_id}")
         raise HTTPException(status_code=404, detail="Stamp not found")
 
     # Remove image file if it exists
@@ -200,10 +270,19 @@ def delete_stamp_endpoint(stamp_id: int, db: Session = Depends(get_db)):
         filename = os.path.basename(stamp.image_url)
         file_path = os.path.join(UPLOAD_DIR, filename)
         if os.path.exists(file_path):
-            os.remove(file_path)
+            try:
+                os.remove(file_path)
+                logger.info(f"Deleted image file: {filename}")
+            except Exception as e:
+                logger.error(f"Error deleting image file {filename}: {e}")
 
-    delete_stamp(db, stamp_id)
-    return {"detail": "Stamp deleted successfully"}
+    try:
+        delete_stamp(db, stamp_id)
+        logger.info(f"Stamp {stamp_id} deleted successfully")
+        return {"detail": "Stamp deleted successfully"}
+    except Exception as e:
+        logger.error(f"Error deleting stamp {stamp_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to delete stamp from database")
 
 
 # --- AI endpoints ---
@@ -213,8 +292,10 @@ def delete_stamp_endpoint(stamp_id: int, db: Session = Depends(get_db)):
 async def analyze_image(
     image: UploadFile = File(...),
 ):
+    logger.info(f"AI image analysis requested: {image.filename}")
     ai_api_key = os.getenv("AI_API_KEY")
     if not ai_api_key:
+        logger.warning("AI analysis requested but AI_API_KEY not configured")
         raise HTTPException(
             status_code=501,
             detail={
@@ -225,6 +306,7 @@ async def analyze_image(
 
     bad_ext = validate_image_file(image)
     if bad_ext:
+        logger.warning(f"Unsupported image type for AI analysis: {bad_ext}")
         raise HTTPException(
             status_code=400,
             detail=f"Unsupported image type: .{bad_ext.lstrip('.')}. Supported: jpg, jpeg, png, webp",
@@ -237,14 +319,19 @@ async def analyze_image(
         f.write(contents)
 
     try:
-        # Call AI API (placeholder — implement based on your provider)
+        logger.info(f"Calling AI API with model: {os.getenv('AI_MODEL')}")
         suggestions = await call_ai_api(temp_path, ai_api_key)
+        logger.info(f"AI analysis completed successfully")
         return {"suggestions": suggestions}
     except Exception as e:
+        logger.error(f"AI analysis failed: {e}", exc_info=True)
         return {"suggestions": {}, "error": str(e)}
     finally:
         if os.path.exists(temp_path):
-            os.remove(temp_path)
+            try:
+                os.remove(temp_path)
+            except Exception as e:
+                logger.error(f"Error cleaning up temp AI file: {e}")
 
 
 async def call_ai_api(image_path: str, api_key: str) -> dict:
@@ -255,9 +342,11 @@ async def call_ai_api(image_path: str, api_key: str) -> dict:
     """
     import httpx
 
-    ai_api_url = os.getenv("AI_API_URL", "http://framework.gruru.net:11434")
+    ai_api_url = os.getenv("AI_API_URL", "http://example.com:11434")
     ai_model = os.getenv("AI_MODEL", "qwen3.6:35B")
     ai_prompt = os.getenv("AI_PROMPT", "Analyze this stamp image and return product_name, brand_name, product_type, theme, shape_descriptor, sentiments as JSON.")
+
+    logger.info(f"Calling AI API: {ai_api_url} with model {ai_model}")
 
     # Read image and encode as base64
     import base64
@@ -282,29 +371,45 @@ async def call_ai_api(image_path: str, api_key: str) -> dict:
         "stream": False,
     }
 
-    async with httpx.AsyncClient(timeout=120) as client:
-        response = await client.post(
-            f"{ai_api_url.rstrip('/')}/api/chat",
-            json=payload,
-        )
-        response.raise_for_status()
-        result = response.json()
+    try:
+        async with httpx.AsyncClient(timeout=120) as client:
+            response = await client.post(
+                f"{ai_api_url.rstrip('/')}/api/chat",
+                json=payload,
+            )
+            response.raise_for_status()
+            result = response.json()
+    except httpx.HTTPError as e:
+        logger.error(f"HTTP error calling AI API: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Error calling AI API: {e}", exc_info=True)
+        raise
 
     # Parse AI response and extract suggestions
     content = result.get("message", {}).get("content", "")
     if not content:
+        logger.warning("AI API returned empty content")
         return {}
 
     import json
     try:
         suggestions = json.loads(content)
+        logger.info(f"AI analysis successful: extracted {len(suggestions)} fields")
     except json.JSONDecodeError:
+        logger.warning("AI API returned non-JSON content, attempting to extract from markdown")
         # Try to extract JSON from markdown code blocks
         import re
         match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, re.DOTALL)
         if match:
-            suggestions = json.loads(match.group(1))
+            try:
+                suggestions = json.loads(match.group(1))
+                logger.info(f"AI analysis successful (markdown): extracted {len(suggestions)} fields")
+            except json.JSONDecodeError:
+                logger.error("Failed to parse JSON from markdown code block")
+                suggestions = {}
         else:
+            logger.error("Could not extract JSON from AI response")
             suggestions = {}
 
     return suggestions

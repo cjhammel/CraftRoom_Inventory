@@ -2,7 +2,10 @@ import os
 import uuid
 import subprocess
 import shutil
+import logging
 from typing import Optional
+
+logger = logging.getLogger("craftroom")
 
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -29,8 +32,11 @@ def resize_image(input_path: str, output_path: str) -> str:
     """Resize/compress image to <= MAX_FILE_SIZE using ffmpeg, preserving aspect ratio."""
     # Check current size
     file_size = os.path.getsize(input_path)
+    logger.debug(f"Image size: {file_size} bytes")
+    
     if file_size <= MAX_FILE_SIZE:
         # No resize needed, just copy
+        logger.debug(f"Image under {MAX_FILE_SIZE} bytes, copying as-is")
         shutil.copy2(input_path, output_path)
         return output_path
 
@@ -90,8 +96,10 @@ def resize_image(input_path: str, output_path: str) -> str:
 
     except FileNotFoundError:
         # ffmpeg/ffprobe not available — just copy the file
+        logger.warning("ffmpeg/ffprobe not found, copying file without resize")
         shutil.copy2(input_path, output_path)
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error during image resize: {e}", exc_info=True)
         shutil.copy2(input_path, output_path)
 
     return output_path
