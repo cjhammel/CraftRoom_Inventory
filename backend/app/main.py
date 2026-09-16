@@ -293,13 +293,13 @@ async def analyze_image(
     image: UploadFile = File(...),
 ):
     logger.info(f"AI image analysis requested: {image.filename}")
-    ai_api_key = os.getenv("AI_API_KEY")
-    if not ai_api_key:
-        logger.warning("AI analysis requested but AI_API_KEY not configured")
+    ai_api_url = os.getenv("AI_API_URL")
+    if not ai_api_url:
+        logger.warning("AI analysis requested but AI_API_URL not configured")
         raise HTTPException(
             status_code=501,
             detail={
-                "message": "AI service is not configured. Set AI_API_KEY in your .env file to enable image analysis.",
+                "message": "AI service is not configured. Set AI_API_URL in your .env file to enable image analysis.",
                 "suggestions": {},
             },
         )
@@ -311,6 +311,8 @@ async def analyze_image(
             status_code=400,
             detail=f"Unsupported image type: .{bad_ext.lstrip('.')}. Supported: jpg, jpeg, png, webp",
         )
+
+    ai_api_key = os.getenv("AI_API_KEY", "")
 
     # Save temporarily for AI processing
     temp_path = os.path.join(UPLOAD_DIR, f"temp_ai_{generate_safe_filename(image.filename)}")
