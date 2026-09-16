@@ -192,7 +192,7 @@
 |---|---|---|---|
 | 1 | Data model (SQLite) | ✅ Complete | `stamp` table with all required columns, `create_all()` on startup |
 | 2 | REST API | ✅ Complete | All CRUD endpoints + search/filter working |
-| 2a | GET /stamps with filters | ✅ Complete | Supports `q`, `brand_name`, `product_type`, `location`, `sentiments` params |
+| 2a | GET /stamps with filters | ✅ Complete | Supports `q`, `brand_name`, `theme`, `location`, `sentiments` params |
 | 2b | GET /stamps/{id} | ✅ Complete | Returns 404 for missing stamps |
 | 2c | POST /stamps | ✅ Complete | multipart/form-data, image upload, validation |
 | 2d | PUT /stamps/{id} | ✅ Complete | Partial updates, optional image replacement |
@@ -202,7 +202,7 @@
 | 4 | AI image analysis | ✅ Complete | Optional, non-blocking, auto-detects API type, 3x retry |
 | 5 | Frontend UI | ✅ Complete | React + Vite, responsive, polished |
 | 5a | List view (card grid) | ✅ Complete | Thumbnails, metadata display |
-| 5b | Search & filters | ✅ Complete | Real-time search, brand/type/location/sentiments filters |
+| 5b | Search & filters | ✅ Complete | Real-time search, brand/theme/location/sentiments filters, clear button |
 | 5c | Detail view | ✅ Complete | Full stamp info, large image, Edit/Delete buttons |
 | 5d | Add/Edit form | ✅ Complete | Reusable component, all fields, image preview, rotation controls |
 | 5e | Analyze Image button | ✅ Complete | Auto-populates fields from AI response |
@@ -244,15 +244,16 @@
 - **Arch Linux installation instructions**: Added to README.md
 - **Pillow dependency**: Used in tests for creating test images
 - **`.gitignore`**: Excludes `.env`, `stamps.db`, `venv/`, `logs/`, uploads
-- **Sentiments search filter**: Added `sentiments` query param to `GET /stamps` and frontend search bar
-- **Image rotation**: Added rotate left/right buttons to stamp form with canvas-based rotation and remove image option
-- **AI reliability improvements**: Stronger JSON prompt, 3x retry logic for empty responses, detailed debug logging
+- **Theme filter**: Replaced product_type with theme in search filters (backend + frontend)
+- **Clear search button**: Added button to reset all search filters in frontend
+- **Multi-word sentiments search**: Splits sentiments query on spaces, matches any term
+- **Absolute database path**: `stamps.db` path resolved relative to project root, prevents overwrite on restart
 
 ### Environment Variables
 
 | Variable | Default | Description |
 |---|---|---|
-| `DATABASE_URL` | `sqlite:///../stamps.db` | SQLite database path |
+| `DATABASE_URL` | `sqlite:///stamps.db` (absolute) | SQLite database path (resolved to project root) |
 | `UPLOAD_DIR` | `uploads` | Directory for uploaded images |
 | `FRONTEND_ORIGIN` | `http://localhost:3000` | CORS allowed origin |
 | `AI_API_URL` | `http://framework.gruru.net:11434` | Ollama/llama.cpp server URL (supports `/v1` path) |
