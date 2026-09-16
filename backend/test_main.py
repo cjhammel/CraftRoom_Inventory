@@ -1,23 +1,28 @@
 import os
 import sys
-import tempfile
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "."))
 
-from app.database import engine, SessionLocal, Base, get_db
+from app.database import Base, get_db
 from app.main import app
 
 
-@pytest.fixture(scope="module")
-def client():
-    # Create test tables
-    Base.metadata.create_all(bind=engine)
+@pytest.fixture
+def client(tmp_path):
+    test_db_path = tmp_path / "test_stamps.db"
+    test_engine = create_engine(
+        f"sqlite:///{test_db_path}",
+        connect_args={"check_same_thread": False},
+    )
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+    Base.metadata.create_all(bind=test_engine)
 
-    # Override DB dependency to use test DB
     def override_get_db():
-        db = SessionLocal()
+        db = TestingSessionLocal()
         try:
             yield db
         finally:
@@ -29,21 +34,19 @@ def client():
     yield test_client
     app.dependency_overrides.clear()
 
-    # Cleanup
-    Base.metadata.drop_all(bind=engine)
+    Base.metadata.drop_all(bind=test_engine)
+    test_engine.dispose()
 
 
 def create_stamp(client, **kwargs):
     data = {
         "product_name": "Test Stamp",
         "brand_name": "Test Brand",
-        "retired": False,
         "product_type": "Rubber",
         "theme": "Floral",
         "shape_descriptor": "Square",
         "sentiments": "Hello",
         "location": "Box 1",
-        "price": "12.99",
         **kwargs,
     }
     return client.post("/stamps", data=data)
@@ -87,12 +90,11 @@ def test_update_stamp(client):
 
     response = client.put(
         f"/stamps/{stamp_id}",
-        data={"brand_name": "Updated Brand", "price": "15.99"},
+        data={"brand_name": "Updated Brand"},
     )
     assert response.status_code == 200
     body = response.json()
     assert body["brand_name"] == "Updated Brand"
-    assert body["price"] == 15.99
 
 
 def test_delete_stamp(client):
@@ -112,8 +114,20 @@ def test_delete_stamp_404(client):
 
 
 def test_search_stamps(client):
-    create_stamp(client, product_name="Blue Mauritius", brand_name="StampCo")
-    create_stamp(client, product_name="Red Rose", brand_name="CraftCo")
+    create_stamp(
+        client,
+        product_name="Blue Mauritius",
+        brand_name="StampCo",
+        product_type="Rubber",
+        location="Box 1",
+    )
+    create_stamp(
+        client,
+        product_name="Red Rose",
+        brand_name="CraftCo",
+        product_type="Clear",
+        location="Album A",
+    )
 
     response = client.get("/stamps?q=Blue")
     assert response.status_code == 200
@@ -130,7 +144,14 @@ def test_search_stamps(client):
     response = client.get("/stamps?product_type=Rubber")
     assert response.status_code == 200
     stamps = response.json()
-    assert len(stamps) >= 1
+    assert len(stamps) == 1
+    assert stamps[0]["product_type"] == "Rubber"
+
+    response = client.get("/stamps?location=Album")
+    assert response.status_code == 200
+    stamps = response.json()
+    assert len(stamps) == 1
+    assert stamps[0]["location"] == "Album A"
 
 
 def test_invalid_image_upload(client):
@@ -148,15 +169,7 @@ def test_create_stamp_empty_product_name(client):
         "/stamps",
         data={"product_name": "", "brand_name": "Test"},
     )
-    assert response.status_code == 422  # Pydantic validation error
-
-
-def test_create_stamp_invalid_price(client):
-    response = client.post(
-        "/stamps",
-        data={"product_name": "Test", "price": "not_a_number"},
-    )
-    assert response.status_code == 400  # Validation error from route handler
+    assert response.status_code == 400
 
 
 def test_update_stamp_404(client):
@@ -165,6 +178,17 @@ def test_update_stamp_404(client):
         data={"product_name": "Updated"},
     )
     assert response.status_code == 404
+
+
+def test_update_stamp_empty_product_name(client):
+    response = create_stamp(client)
+    stamp_id = response.json()["id"]
+
+    response = client.put(
+        f"/stamps/{stamp_id}",
+        data={"product_name": ""},
+    )
+    assert response.status_code == 400
 
 
 def test_ai_analyze_not_configured(client, monkeypatch):
@@ -183,17 +207,10 @@ def test_ai_analyze_not_configured(client, monkeypatch):
     assert "AI_API_URL" in body["detail"]["message"]
 
 
-def test_create_stamp_with_retired(client):
-    response = create_stamp(client, retired=True)
-    assert response.status_code == 200
-    body = response.json()
-    assert body["retired"] is True
-
-
 # --- Image upload and AI tests ---
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-EXAMPLE_IMAGE_PATH = os.path.join(PROJECT_ROOT, "example_image", "IMG_20210616_132042564.jpg")
+EXAMPLE_IMAGE_PATH = os.path.join(PROJECT_ROOT, "example_image", "Testimage1.jpg")
 
 
 def test_image_upload_and_resize(client):
@@ -264,6 +281,9 @@ def test_image_upload_preserves_small_images(client):
 
 def test_ai_analyze_with_real_image(client, monkeypatch):
     """Test AI image analysis with a real image against the configured AI server."""
+    if not os.getenv("RUN_EXTERNAL_AI_TESTS"):
+        pytest.skip("Set RUN_EXTERNAL_AI_TESTS=1 to run external AI integration tests")
+
     if not os.path.exists(EXAMPLE_IMAGE_PATH):
         pytest.skip(f"Example image not found at {EXAMPLE_IMAGE_PATH}")
 
@@ -303,6 +323,7 @@ def test_ai_analyze_with_mock_response(client, monkeypatch):
 
     from app import main
     monkeypatch.setattr(main, "call_ai_api", mock_call_ai_api)
+    monkeypatch.setenv("AI_API_URL", "http://example.test:11434")
     monkeypatch.setenv("AI_API_KEY", "test-key")
 
     # Create a small test image

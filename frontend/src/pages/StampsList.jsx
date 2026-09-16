@@ -9,6 +9,7 @@ function StampsList() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [brand, setBrand] = useState('')
+  const [productType, setProductType] = useState('')
   const [theme, setTheme] = useState('')
   const [location, setLocation] = useState('')
   const [sentiments, setSentiments] = useState('')
@@ -25,6 +26,7 @@ function StampsList() {
       const params = new URLSearchParams()
       if (search) params.set('q', search)
       if (brand) params.set('brand_name', brand)
+      if (productType) params.set('product_type', productType)
       if (theme) params.set('theme', theme)
       if (location) params.set('location', location)
       if (sentiments) params.set('sentiments', sentiments)
@@ -73,6 +75,12 @@ function StampsList() {
         />
         <input
           type="text"
+          placeholder="Filter by product type..."
+          value={productType}
+          onChange={(e) => setProductType(e.target.value)}
+        />
+        <input
+          type="text"
           placeholder="Filter by theme..."
           value={theme}
           onChange={(e) => setTheme(e.target.value)}
@@ -98,6 +106,7 @@ function StampsList() {
           onClick={() => {
             setSearch('')
             setBrand('')
+            setProductType('')
             setTheme('')
             setLocation('')
             setSentiments('')
@@ -111,7 +120,7 @@ function StampsList() {
         <div className="empty-state">
           <h2>No stamps found</h2>
           <p>
-            {search || brand || theme || location || sentiments
+            {search || brand || productType || theme || location || sentiments
               ? 'Try adjusting your filters'
               : 'Add your first stamp to get started!'}
           </p>
@@ -132,16 +141,23 @@ function StampsList() {
                 {stamp.brand_name && (
                   <div className="stamp-card-brand">{stamp.brand_name}</div>
                 )}
-                <div className="stamp-card-meta">
-                  {stamp.price && (
-                    <span className="stamp-card-price">
-                      ${Number(stamp.price).toFixed(2)}
-                    </span>
+                <dl className="stamp-card-details">
+                  {stamp.product_type && (
+                    <div><dt>Type</dt><dd>{stamp.product_type}</dd></div>
                   )}
-                  {stamp.retired && (
-                    <span className="stamp-retired-badge">Retired</span>
+                  {stamp.theme && (
+                    <div><dt>Theme</dt><dd>{stamp.theme}</dd></div>
                   )}
-                </div>
+                  {stamp.shape_descriptor && (
+                    <div><dt>Shape</dt><dd>{stamp.shape_descriptor}</dd></div>
+                  )}
+                  {stamp.sentiments && (
+                    <div><dt>Sentiments</dt><dd>{stamp.sentiments}</dd></div>
+                  )}
+                  {stamp.location && (
+                    <div><dt>Location</dt><dd>{stamp.location}</dd></div>
+                  )}
+                </dl>
               </div>
             </Link>
           ))}

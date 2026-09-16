@@ -54,8 +54,6 @@ function StampDetail() {
     { label: 'Shape', value: stamp.shape_descriptor },
     { label: 'Sentiments', value: stamp.sentiments },
     { label: 'Location', value: stamp.location },
-    { label: 'Price', value: stamp.price ? `$${Number(stamp.price).toFixed(2)}` : null },
-    { label: 'Retired', value: stamp.retired ? 'Yes' : 'No' },
   ]
 
   return (

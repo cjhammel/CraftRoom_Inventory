@@ -19,14 +19,12 @@
 >        id               INTEGER PRIMARY KEY AUTOINCREMENT,
 >        product_name     TEXT    NOT NULL,         -- e.g. "Blue Mauritius"
 >        brand_name       TEXT,                      -- brand name
->        retired          BOOLEAN NOT NULL DEFAULT 0,-- whether the stamp has been retired
 >        product_type     TEXT,                      -- product type
 >        image_url        TEXT,                      -- optional URL to an uploaded image
 >        theme            TEXT,                      -- stamp set theme
 >        shape_descriptor TEXT,                      -- description of the stamp shape
 >        sentiments       TEXT,                      -- sentiments seen on the stamp
->        location         TEXT,                      -- storage location (box, album, etc.)
->        price            NUMERIC                    -- purchase price
+>        location         TEXT                       -- storage location (box, album, etc.)
 >    );
 >    ```
 >
@@ -36,7 +34,6 @@
 >      - `q`: search by `product_name` or `brand_name`
 >      - `brand_name`
 >      - `product_type`
->      - `price`
 >      - `location`
 >    - `GET /stamps/{id}` - Retrieve a single stamp. Return `404` when the stamp does not exist.
 >    - `POST /stamps` - Create a new stamp. Accept `multipart/form-data` so the request can include fields plus an optional image file. Validate that `product_name` is present and non-empty.
@@ -47,7 +44,6 @@
 >    API behavior:
 >    - Return JSON responses with proper HTTP status codes.
 >    - Include CORS headers so the React frontend can call the backend from `http://localhost:3000` or the configured frontend origin.
->    - Validate `price` as a valid decimal value when provided.
 >    - Validate uploaded file types. Support at least `jpg`, `jpeg`, `png`, and `webp`.
 >    - Reject unsupported image types or invalid payloads with `400`.
 >    - Serve uploaded images from `/uploads/{filename}`.
@@ -71,12 +67,12 @@
 >
 > 5. **Frontend UI**
 >
->    - **List view**: Table or card grid displaying `product_name`, `brand_name`, `product_type`, `retired`, `theme`, `shape_descriptor`, `sentiments`, `location`, `price`, and a thumbnail when `image_url` exists.
->    - Include a search bar and simple filters for `brand_name`, `product_type`, `price`, and `location`.
+>    - **List view**: Table or card grid displaying `product_name`, `brand_name`, `product_type`, `theme`, `shape_descriptor`, `sentiments`, `location`, and a thumbnail when `image_url` exists.
+>    - Include a search bar and simple filters for `brand_name`, `product_type`, and `location`.
 >    - **Detail view**: Show all fields, a larger image, and `Edit` / `Delete` buttons.
 >    - **Add/Edit form**: Re-use the same component. Include fields for every database column except `id` and `image_url`, plus an image file upload input with preview.
 >    - Include an `Analyze Image` button that sends the selected image to `POST /ai/analyze-image` and uses the returned JSON to auto-populate matching fields.
->    - Add client-side validation for required `product_name` and valid `price`.
+>    - Add client-side validation for required `product_name`.
 >    - Include a delete confirmation modal.
 >    - Use `fetch` or `axios` to communicate with the API.
 >    - The UI should be minimal, polished, responsive, and usable on desktop and mobile.
@@ -206,7 +202,7 @@
 | 5c | Detail view | ✅ Complete | Full stamp info, large image, Edit/Delete buttons |
 | 5d | Add/Edit form | ✅ Complete | Reusable component, all fields, image preview, rotation controls |
 | 5e | Analyze Image button | ✅ Complete | Auto-populates fields from AI response |
-| 5f | Client-side validation | ✅ Complete | Required product_name, valid price |
+| 5f | Client-side validation | ✅ Complete | Required product_name |
 | 5g | Delete confirmation modal | ✅ Complete | Modal overlay with cancel/confirm |
 | 5h | Image rotation | ✅ Complete | Rotate left/right buttons with canvas-based transformation |
 | 6 | Project structure | ✅ Complete | Matches spec with minor adjustments |
@@ -216,7 +212,7 @@
 | 10a | Drag-and-drop upload | ✅ Complete | Visual feedback, drop zone highlighting |
 | 10b | Error logging | ✅ Complete | Comprehensive logging to `backend/logs/app.log` |
 
-### Test Coverage (18 tests)
+### Test Coverage
 
 - ✅ create stamp
 - ✅ list stamps
@@ -228,9 +224,7 @@
 - ✅ search/filter stamps
 - ✅ invalid image upload returns 400
 - ✅ empty product_name validation
-- ✅ invalid price validation
 - ✅ AI not configured returns 501
-- ✅ stamp with retired flag
 - ✅ image upload and resize (≤ 1MB verification)
 - ✅ small image preservation (no upscaling)
 - ✅ AI analysis with real image (http://framework.gruru.net:11434)

@@ -5,7 +5,7 @@ A lightweight web application to inventory craft stamps. Built with FastAPI (bac
 ## Features
 
 - **CRUD operations** — Create, view, edit, and delete stamps
-- **Search & filter** — Search by name/brand, filter by type, brand, location
+- **Search & filter** — Search by name/brand, filter by brand, product type, location, theme, and sentiments
 - **Image uploads** — Upload stamp images with automatic resizing/compression via `ffmpeg`
 - **AI image analysis** — Optional AI-powered stamp attribute detection (requires API key)
 - **Responsive UI** — Works on desktop and mobile
@@ -44,7 +44,7 @@ pip install -r requirements.txt
 cp ../.env.example .env
 ```
 
-Edit `.env` and set your `AI_API_KEY` if you want to use the AI image analysis feature.
+Edit `.env` and set `AI_API_URL`, `AI_MODEL`, and optionally `AI_API_KEY` if you want to use the AI image analysis feature.
 
 ### 2. Frontend
 
@@ -77,7 +77,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 | `DATABASE_URL` | SQLite database path | `sqlite:///../stamps.db` |
 | `UPLOAD_DIR` | Directory for uploaded images | `uploads` |
 | `FRONTEND_ORIGIN` | CORS allowed origin | `http://localhost:3000` |
-| `AI_API_URL` | llama.cpp / Ollama server URL | `http://example.com:11434` |
+| `AI_API_URL` | llama.cpp / Ollama server URL | _(empty)_ |
 | `AI_API_KEY` | API key (optional for some providers) | _(empty)_ |
 | `AI_MODEL` | Model name to use | `qwen3.6:35B` |
 | `AI_PROMPT` | Custom AI analysis prompt | _(default prompt)_ |
@@ -86,7 +86,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/stamps` | List all stamps (with optional `q`, `brand_name`, `product_type`, `location` query params) |
+| `GET` | `/stamps` | List all stamps (with optional `q`, `brand_name`, `product_type`, `location`, `theme`, `sentiments` query params) |
 | `GET` | `/stamps/{id}` | Get a single stamp by ID |
 | `POST` | `/stamps` | Create a new stamp (accepts `multipart/form-data`) |
 | `PUT` | `/stamps/{id}` | Update an existing stamp (accepts `multipart/form-data`) |
@@ -103,11 +103,11 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## AI Image Analysis
 
-The AI analysis feature is **optional**. If the AI server (`AI_API_URL`) is not reachable, the `/ai/analyze-image` endpoint returns a `501 Not Implemented` response without blocking normal CRUD operations.
+The AI analysis feature is **optional**. If `AI_API_URL` is not configured, the `/ai/analyze-image` endpoint returns a `501 Not Implemented` response without blocking normal CRUD operations. If a configured AI server fails, the endpoint returns empty suggestions with an error message so regular CRUD usage still works.
 
 To enable AI analysis:
 
-1. Ensure the llama.cpp / Ollama-compatible server is running at `AI_API_URL` (default: `http://example.com:11434`)
+1. Ensure the llama.cpp / Ollama-compatible server is running at `AI_API_URL`
 2. The server should have the model `qwen3.6:35B` available (or set `AI_MODEL` in `.env`)
 3. Optionally customize `AI_PROMPT` to change the analysis behavior
 4. Set `AI_API_KEY` if your server requires authentication

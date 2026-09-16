@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from app.models import Stamp
 from typing import Optional, List, Dict, Any
 
@@ -11,6 +12,7 @@ def get_stamps(
     db: Session,
     search: Optional[str] = None,
     brand_name: Optional[str] = None,
+    product_type: Optional[str] = None,
     theme: Optional[str] = None,
     location: Optional[str] = None,
     sentiments: Optional[str] = None,
@@ -26,6 +28,9 @@ def get_stamps(
     if brand_name:
         query = query.filter(Stamp.brand_name.ilike(f"%{brand_name}%"))
 
+    if product_type:
+        query = query.filter(Stamp.product_type.ilike(f"%{product_type}%"))
+
     if theme:
         query = query.filter(Stamp.theme.ilike(f"%{theme}%"))
 
@@ -36,16 +41,12 @@ def get_stamps(
         sentiment_terms = [t.strip().lower() for t in sentiments.split() if t.strip()]
         if sentiment_terms:
             sentiment_conditions = [Stamp.sentiments.ilike(f"%{term}%") for term in sentiment_terms]
-            query = query.filter(*sentiment_conditions)
+            query = query.filter(or_(*sentiment_conditions))
 
     return query.all()
 
 
 def create_stamp(db: Session, stamp_data: Dict[str, Any]) -> Stamp:
-    price_val = stamp_data.get("price")
-    if price_val is not None:
-        stamp_data["price"] = float(price_val)
-
     db_stamp = Stamp(**stamp_data)
     db.add(db_stamp)
     db.commit()
@@ -57,10 +58,6 @@ def update_stamp(db: Session, stamp_id: int, stamp_data: Dict[str, Any]) -> Opti
     db_stamp = get_stamp(db, stamp_id)
     if not db_stamp:
         return None
-
-    price_val = stamp_data.get("price")
-    if price_val is not None:
-        stamp_data["price"] = float(price_val)
 
     for key, value in stamp_data.items():
         if value is not None:

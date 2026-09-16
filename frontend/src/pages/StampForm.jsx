@@ -13,13 +13,11 @@ function StampForm() {
   const [form, setForm] = useState({
     product_name: '',
     brand_name: '',
-    retired: false,
     product_type: '',
     theme: '',
     shape_descriptor: '',
     sentiments: '',
     location: '',
-    price: '',
   })
 
   const [imageFile, setImageFile] = useState(null)
@@ -47,13 +45,11 @@ function StampForm() {
       setForm({
         product_name: stamp.product_name || '',
         brand_name: stamp.brand_name || '',
-        retired: stamp.retired || false,
         product_type: stamp.product_type || '',
         theme: stamp.theme || '',
         shape_descriptor: stamp.shape_descriptor || '',
         sentiments: stamp.sentiments || '',
         location: stamp.location || '',
-        price: stamp.price ? String(stamp.price) : '',
       })
       setImagePreview(stamp.image_url ? `${API_URL}${stamp.image_url}` : null)
     } catch (err) {
@@ -228,10 +224,6 @@ function StampForm() {
     if (!form.product_name.trim()) {
       newErrors.product_name = 'Product name is required'
     }
-    if (form.price && isNaN(parseFloat(form.price))) {
-      newErrors.price = 'Price must be a valid number'
-    }
-
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
       return
@@ -242,13 +234,11 @@ function StampForm() {
     const formData = new FormData()
     formData.append('product_name', form.product_name)
     if (form.brand_name) formData.append('brand_name', form.brand_name)
-    formData.append('retired', form.retired)
     if (form.product_type) formData.append('product_type', form.product_type)
     if (form.theme) formData.append('theme', form.theme)
     if (form.shape_descriptor) formData.append('shape_descriptor', form.shape_descriptor)
     if (form.sentiments) formData.append('sentiments', form.sentiments)
     if (form.location) formData.append('location', form.location)
-    if (form.price) formData.append('price', form.price)
     if (rotatedFile) formData.append('image', rotatedFile)
     else if (imageFile) formData.append('image', imageFile)
 
@@ -312,6 +302,14 @@ function StampForm() {
             <div className="image-actions">
               <button
                 type="button"
+                className="btn btn-secondary analyze-btn"
+                onClick={handleAnalyzeImage}
+                disabled={analyzing}
+              >
+                {analyzing ? 'Analyzing...' : '✨ Analyze Image'}
+              </button>
+              <button
+                type="button"
                 className="btn btn-secondary rotate-btn"
                 onClick={handleRotateLeft}
               >
@@ -330,14 +328,6 @@ function StampForm() {
                 onClick={handleResetImage}
               >
                 Remove Image
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary analyze-btn"
-                onClick={handleAnalyzeImage}
-                disabled={analyzing}
-              >
-                {analyzing ? 'Analyzing...' : '✨ Analyze Image'}
               </button>
             </div>
           )}
@@ -413,40 +403,15 @@ function StampForm() {
           />
         </div>
 
-        <div className="form-row">
-          <div className="form-group">
-            <label>Storage Location</label>
-            <input
-              type="text"
-              name="location"
-              value={form.location}
-              onChange={handleChange}
-              placeholder="e.g. Box 1, Album A"
-            />
-          </div>
-          <div className="form-group">
-            <label>Price</label>
-            <input
-              type="text"
-              name="price"
-              value={form.price}
-              onChange={handleChange}
-              placeholder="e.g. 12.99"
-            />
-            {errors.price && <div className="error">{errors.price}</div>}
-          </div>
-        </div>
-
         <div className="form-group">
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <input
-              type="checkbox"
-              name="retired"
-              checked={form.retired}
-              onChange={handleChange}
-            />
-            Retired
-          </label>
+          <label>Storage Location</label>
+          <input
+            type="text"
+            name="location"
+            value={form.location}
+            onChange={handleChange}
+            placeholder="e.g. Box 1, Album A"
+          />
         </div>
 
         <div className="form-actions">

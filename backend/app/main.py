@@ -5,7 +5,7 @@ from typing import Optional
 from pathlib import Path
 from dotenv import load_dotenv
 
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Query, Form
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Query, Form, Request
 
 # Load .env file
 _env_path = Path(__file__).resolve().parents[1] / ".env"
@@ -71,15 +71,26 @@ def startup():
 def list_stamps(
     q: Optional[str] = Query(None),
     brand_name: Optional[str] = Query(None),
+    product_type: Optional[str] = Query(None),
     theme: Optional[str] = Query(None),
     location: Optional[str] = Query(None),
     sentiments: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     try:
-        stamps = get_stamps(db, search=q, brand_name=brand_name, theme=theme, location=location, sentiments=sentiments)
-        logger.info(f"Listed {len(stamps)} stamps (q={q}, brand={brand_name}, theme={theme}, loc={location}, sentiments={sentiments})")
+        stamps = get_stamps(
+            db,
+            search=q,
+            brand_name=brand_name,
+            product_type=product_type,
+            theme=theme,
+            location=location,
+            sentiments=sentiments,
+        )
+        logger.info(f"Listed {len(stamps)} stamps (q={q}, brand={brand_name}, product_type={product_type}, theme={theme}, loc={location}, sentiments={sentiments})")
         return stamps
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error listing stamps: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to list stamps")
@@ -103,15 +114,13 @@ def get_stamp_by_id(stamp_id: int, db: Session = Depends(get_db)):
 
 @app.post("/stamps", response_model=StampResponse)
 async def create_stamp_endpoint(
-    product_name: str = Form(...),
+    product_name: Optional[str] = Form(None),
     brand_name: Optional[str] = Form(None),
-    retired: bool = Form(False),
     product_type: Optional[str] = Form(None),
     theme: Optional[str] = Form(None),
     shape_descriptor: Optional[str] = Form(None),
     sentiments: Optional[str] = Form(None),
     location: Optional[str] = Form(None),
-    price: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -122,24 +131,14 @@ async def create_stamp_endpoint(
         logger.warning(f"Empty product_name received")
         raise HTTPException(status_code=400, detail="product_name is required and cannot be empty")
 
-    # Validate price
-    if price is not None:
-        try:
-            float(price)
-        except ValueError:
-            logger.warning(f"Invalid price format: {price}")
-            raise HTTPException(status_code=400, detail="price must be a valid decimal number")
-
     stamp_data = {
         "product_name": product_name.strip(),
         "brand_name": brand_name,
-        "retired": retired,
         "product_type": product_type,
         "theme": theme,
         "shape_descriptor": shape_descriptor,
         "sentiments": sentiments,
         "location": location,
-        "price": price,
     }
 
     # Handle image upload
@@ -186,16 +185,15 @@ async def create_stamp_endpoint(
 
 @app.put("/stamps/{stamp_id}", response_model=StampResponse)
 async def update_stamp_endpoint(
+    request: Request,
     stamp_id: int,
     product_name: Optional[str] = Form(None),
     brand_name: Optional[str] = Form(None),
-    retired: Optional[bool] = Form(None),
     product_type: Optional[str] = Form(None),
     theme: Optional[str] = Form(None),
     shape_descriptor: Optional[str] = Form(None),
     sentiments: Optional[str] = Form(None),
     location: Optional[str] = Form(None),
-    price: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -205,13 +203,18 @@ async def update_stamp_endpoint(
         logger.warning(f"Stamp not found for update: {stamp_id}")
         raise HTTPException(status_code=404, detail="Stamp not found")
 
+    form = await request.form()
     stamp_data = {}
+    if "product_name" in form and not str(form.get("product_name") or "").strip():
+        logger.warning(f"Empty product_name received for stamp {stamp_id}")
+        raise HTTPException(status_code=400, detail="product_name is required and cannot be empty")
     if product_name is not None:
+        if not product_name.strip():
+            logger.warning(f"Empty product_name received for stamp {stamp_id}")
+            raise HTTPException(status_code=400, detail="product_name is required and cannot be empty")
         stamp_data["product_name"] = product_name.strip()
     if brand_name is not None:
         stamp_data["brand_name"] = brand_name
-    if retired is not None:
-        stamp_data["retired"] = retired
     if product_type is not None:
         stamp_data["product_type"] = product_type
     if theme is not None:
@@ -222,8 +225,6 @@ async def update_stamp_endpoint(
         stamp_data["sentiments"] = sentiments
     if location is not None:
         stamp_data["location"] = location
-    if price is not None:
-        stamp_data["price"] = price
 
     # Handle image upload
     if image and image.filename:
