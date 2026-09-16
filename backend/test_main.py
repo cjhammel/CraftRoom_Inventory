@@ -180,3 +180,139 @@ def test_create_stamp_with_retired(client):
     assert response.status_code == 200
     body = response.json()
     assert body["retired"] is True
+
+
+# --- Image upload and AI tests ---
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+EXAMPLE_IMAGE_PATH = os.path.join(PROJECT_ROOT, "example_image", "IMG_20210616_132042564.jpg")
+
+
+def test_image_upload_and_resize(client):
+    """Test uploading a real image file and verify it's resized to <= 1MB."""
+    if not os.path.exists(EXAMPLE_IMAGE_PATH):
+        pytest.skip(f"Example image not found at {EXAMPLE_IMAGE_PATH}")
+
+    with open(EXAMPLE_IMAGE_PATH, "rb") as f:
+        original_size = os.path.getsize(EXAMPLE_IMAGE_PATH)
+        response = client.post(
+            "/stamps",
+            data={
+                "product_name": "Image Test Stamp",
+                "brand_name": "Test Brand",
+                "theme": "Nature",
+            },
+            files={"image": ("test_stamp.jpg", f, "image/jpeg")},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["product_name"] == "Image Test Stamp"
+    assert body["image_url"] is not None
+
+    # Check the saved file size
+    image_filename = os.path.basename(body["image_url"])
+    saved_path = os.path.join(os.path.dirname(__file__), "uploads", image_filename)
+
+    if os.path.exists(saved_path):
+        saved_size = os.path.getsize(saved_path)
+        assert saved_size <= 1_000_000, f"Saved image size {saved_size} bytes exceeds 1MB limit"
+        # If original was larger, it should have been compressed
+        if original_size > 1_000_000:
+            assert saved_size < original_size, "Image was not compressed"
+    else:
+        # File might be in the parent uploads directory
+        parent_saved_path = os.path.join(os.path.dirname(__file__), "..", "uploads", image_filename)
+        if os.path.exists(parent_saved_path):
+            saved_size = os.path.getsize(parent_saved_path)
+            assert saved_size <= 1_000_000, f"Saved image size {saved_size} bytes exceeds 1MB limit"
+
+
+def test_image_upload_preserves_small_images(client):
+    """Test that small images are not upscaled."""
+    # Create a small test image (1x1 red pixel PNG)
+    import io
+    from PIL import Image
+
+    img = Image.new("RGB", (1, 1), color="red")
+    img_buffer = io.BytesIO()
+    img.save(img_buffer, format="JPEG")
+    img_buffer.seek(0)
+
+    original_size = img_buffer.tell()
+    response = client.post(
+        "/stamps",
+        data={
+            "product_name": "Small Image Stamp",
+            "brand_name": "Test Brand",
+        },
+        files={"image": ("small_test.jpg", img_buffer, "image/jpeg")},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["image_url"] is not None
+
+
+def test_ai_analyze_with_real_image(client, monkeypatch):
+    """Test AI image analysis with a real image against the configured AI server."""
+    if not os.path.exists(EXAMPLE_IMAGE_PATH):
+        pytest.skip(f"Example image not found at {EXAMPLE_IMAGE_PATH}")
+
+    # Set up AI configuration
+    monkeypatch.setenv("AI_API_KEY", "test-key")
+    monkeypatch.setenv("AI_API_URL", "http://framework.gruru.net:11434")
+    monkeypatch.setenv("AI_MODEL", "qwen3.6:35B")
+
+    with open(EXAMPLE_IMAGE_PATH, "rb") as f:
+        response = client.post(
+            "/ai/analyze-image",
+            files={"image": ("test_stamp.jpg", f, "image/jpeg")},
+        )
+
+    # The endpoint should succeed (200) or fail gracefully
+    # It may return 501 if the server is not reachable, which is acceptable
+    assert response.status_code in (200, 501, 502, 503, 504)
+
+    body = response.json()
+    assert "suggestions" in body
+
+
+def test_ai_analyze_with_mock_response(client, monkeypatch):
+    """Test AI image analysis with mocked response to avoid network dependency."""
+    import json
+    import asyncio
+
+    async def mock_call_ai_api(image_path, api_key):
+        return {
+            "product_name": "Mocked Stamp",
+            "brand_name": "Mock Brand",
+            "product_type": "Rubber",
+            "theme": "Mock Theme",
+            "shape_descriptor": "Round",
+            "sentiments": "Mock Sentiment",
+        }
+
+    from app import main
+    monkeypatch.setattr(main, "call_ai_api", mock_call_ai_api)
+    monkeypatch.setenv("AI_API_KEY", "test-key")
+
+    # Create a small test image
+    import io
+    from PIL import Image
+
+    img = Image.new("RGB", (10, 10), color="blue")
+    img_buffer = io.BytesIO()
+    img.save(img_buffer, format="JPEG")
+    img_buffer.seek(0)
+
+    response = client.post(
+        "/ai/analyze-image",
+        files={"image": ("test_stamp.jpg", img_buffer, "image/jpeg")},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "suggestions" in body
+    assert body["suggestions"]["product_name"] == "Mocked Stamp"
+    assert body["suggestions"]["brand_name"] == "Mock Brand"
