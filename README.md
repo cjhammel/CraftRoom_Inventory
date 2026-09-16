@@ -17,7 +17,18 @@ A lightweight web application to inventory craft stamps. Built with FastAPI (bac
 - **ffmpeg** and **ffprobe** (for image processing)
   - macOS: `brew install ffmpeg`
   - Ubuntu/Debian: `sudo apt-get install ffmpeg`
+  - Arch Linux: `sudo pacman -S ffmpeg`
   - Windows: Download from [ffmpeg.org](https://ffmpeg.org/download.html)
+
+## Arch Linux Setup
+
+```bash
+# Install system packages
+sudo pacman -S python nodejs npm base-devel
+
+# Python venv works as described below
+# Node.js and npm are provided by the packages above
+```
 
 ## Setup
 
