@@ -33,7 +33,10 @@ def get_stamps(
         query = query.filter(Stamp.location.ilike(f"%{location}%"))
 
     if sentiments:
-        query = query.filter(Stamp.sentiments.ilike(f"%{sentiments}%"))
+        sentiment_terms = [t.strip().lower() for t in sentiments.split() if t.strip()]
+        if sentiment_terms:
+            sentiment_conditions = [Stamp.sentiments.ilike(f"%{term}%") for term in sentiment_terms]
+            query = query.filter(*sentiment_conditions)
 
     return query.all()
 
