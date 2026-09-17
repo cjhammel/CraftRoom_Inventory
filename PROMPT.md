@@ -5,7 +5,7 @@
 > **Required stack**
 > - **Backend**: Python FastAPI, SQLAlchemy, Pydantic, SQLite.
 > - **Frontend**: React + Vite, plain CSS or a lightweight CSS framework such as Bootstrap, Tailwind, or Bulma.
-> - **Database**: SQLite file named `stamps.db` stored in the project root.
+> - **Database**: SQLite file named `product.db` stored in the project root.
 > - **Image processing**: Use `ffmpeg` from the backend to resize/compress uploaded images to <= 1 MB while preserving aspect ratio.
 >
 > **Requirements**
@@ -15,7 +15,14 @@
 >    Create the database table on backend startup using SQLAlchemy `create_all()`. Do not require Alembic migrations unless they are simple and fully wired into the setup instructions.
 >
 >    ```sql
->    CREATE TABLE stamp (
+>    CREATE TABLE location (
+>        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+>        cabinet          TEXT,                      -- cabinet name/number
+>        shelf            TEXT,                      -- shelf name/number
+>        bin              TEXT                       -- bin name/number
+>    );
+>
+>    CREATE TABLE product (
 >        id               INTEGER PRIMARY KEY AUTOINCREMENT,
 >        product_name     TEXT    NOT NULL,         -- e.g. "Blue Mauritius"
 >        brand_name       TEXT,                      -- brand name
@@ -24,7 +31,8 @@
 >        theme            TEXT,                      -- stamp set theme
 >        shape_descriptor TEXT,                      -- description of the stamp shape
 >        sentiments       TEXT,                      -- sentiments seen on the stamp
->        location         TEXT                       -- storage location (box, album, etc.)
+>        location_id      INTEGER,                   -- storage location reference
+>        FOREIGN KEY (location_id) REFERENCES location(id)
 >    );
 >    ```
 >
@@ -34,7 +42,7 @@
 >      - `q`: search by `product_name` or `brand_name`
 >      - `brand_name`
 >      - `product_type`
->      - `location`
+>      - `location`: search by linked location `cabinet`, `shelf`, or `bin`
 >    - `GET /stamps/{id}` - Retrieve a single stamp. Return `404` when the stamp does not exist.
 >    - `POST /stamps` - Create a new stamp. Accept `multipart/form-data` so the request can include fields plus an optional image file. Validate that `product_name` is present and non-empty.
 >    - `PUT /stamps/{id}` - Update an existing stamp. Accept `multipart/form-data`. Image replacement is optional; keep the existing image when no new image is uploaded. Return `404` when the stamp does not exist.
@@ -67,7 +75,7 @@
 >
 > 5. **Frontend UI**
 >
->    - **List view**: Table or card grid displaying `product_name`, `brand_name`, `product_type`, `theme`, `shape_descriptor`, `sentiments`, `location`, and a thumbnail when `image_url` exists.
+>    - **List view**: Table or card grid displaying `product_name`, `brand_name`, `product_type`, `theme`, `shape_descriptor`, `sentiments`, linked location, and a thumbnail when `image_url` exists.
 >    - Include a search bar and simple filters for `brand_name`, `product_type`, and `location`.
 >    - **Detail view**: Show all fields, a larger image, and `Edit` / `Delete` buttons.
 >    - **Add/Edit form**: Re-use the same component. Include fields for every database column except `id` and `image_url`, plus an image file upload input with preview.
@@ -99,7 +107,7 @@
 >            App.jsx
 >            main.jsx
 >        package.json
->    stamps.db
+>    product.db
 >    .env.example
 >    README.md
 >    ```
@@ -109,7 +117,7 @@
 >    Include a `.env.example` file with at least:
 >
 >    ```env
->    DATABASE_URL=sqlite:///../stamps.db
+>    DATABASE_URL=sqlite:///../product.db
 >    UPLOAD_DIR=uploads
 >    FRONTEND_ORIGIN=http://localhost:3000
 >    AI_API_KEY=
@@ -186,9 +194,9 @@
 
 | # | Requirement | Status | Notes |
 |---|---|---|---|
-| 1 | Data model (SQLite) | ✅ Complete | `stamp` table with all required columns, `create_all()` on startup |
+| 1 | Data model (SQLite) | ✅ Complete | `product` table linked to `location` table, `create_all()` on startup |
 | 2 | REST API | ✅ Complete | All CRUD endpoints + search/filter working |
-| 2a | GET /stamps with filters | ✅ Complete | Supports `q`, `brand_name`, `theme`, `location`, `sentiments` params |
+| 2a | GET /stamps with filters | ✅ Complete | Supports `q`, `brand_name`, `theme`, linked `location`, `sentiments` params |
 | 2b | GET /stamps/{id} | ✅ Complete | Returns 404 for missing stamps |
 | 2c | POST /stamps | ✅ Complete | multipart/form-data, image upload, validation |
 | 2d | PUT /stamps/{id} | ✅ Complete | Partial updates, optional image replacement |
@@ -237,17 +245,17 @@
 - **Drag-and-drop image upload**: Visual feedback with highlight effect when dragging files
 - **Arch Linux installation instructions**: Added to README.md
 - **Pillow dependency**: Used in tests for creating test images
-- **`.gitignore`**: Excludes `.env`, `stamps.db`, `venv/`, `logs/`, uploads
+- **`.gitignore`**: Excludes `.env`, `product.db`, `venv/`, `logs/`, uploads
 - **Theme filter**: Replaced product_type with theme in search filters (backend + frontend)
 - **Clear search button**: Added button to reset all search filters in frontend
 - **Multi-word sentiments search**: Splits sentiments query on spaces, matches any term
-- **Absolute database path**: `stamps.db` path resolved relative to project root, prevents overwrite on restart
+- **Absolute database path**: `product.db` path resolved relative to project root, prevents overwrite on restart
 
 ### Environment Variables
 
 | Variable | Default | Description |
 |---|---|---|
-| `DATABASE_URL` | `sqlite:///stamps.db` (absolute) | SQLite database path (resolved to project root) |
+| `DATABASE_URL` | `sqlite:///product.db` (absolute) | SQLite database path (resolved to project root) |
 | `UPLOAD_DIR` | `uploads` | Directory for uploaded images |
 | `FRONTEND_ORIGIN` | `http://localhost:3000` | CORS allowed origin |
 | `AI_API_URL` | `http://framework.gruru.net:11434` | Ollama/llama.cpp server URL (supports `/v1` path) |

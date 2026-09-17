@@ -14,6 +14,10 @@ class StampCreate(BaseModel):
     shape_descriptor: Optional[str] = None
     sentiments: Optional[str] = None
     location: Optional[str] = None
+    location_id: Optional[int] = None
+    cabinet: Optional[str] = None
+    shelf: Optional[str] = None
+    bin: Optional[str] = None
 
     @field_validator("product_name")
     @classmethod
@@ -32,6 +36,10 @@ class StampUpdate(BaseModel):
     shape_descriptor: Optional[str] = None
     sentiments: Optional[str] = None
     location: Optional[str] = None
+    location_id: Optional[int] = None
+    cabinet: Optional[str] = None
+    shelf: Optional[str] = None
+    bin: Optional[str] = None
 
     @field_validator("product_name")
     @classmethod
@@ -53,6 +61,10 @@ class StampResponse(BaseModel):
     shape_descriptor: Optional[str] = None
     sentiments: Optional[str] = None
     location: Optional[str] = None
+    location_id: Optional[int] = None
+    cabinet: Optional[str] = None
+    shelf: Optional[str] = None
+    bin: Optional[str] = None
 
     class Config:
         from_attributes = True

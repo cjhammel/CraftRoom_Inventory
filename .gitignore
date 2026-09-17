@@ -1,6 +1,6 @@
 # Environment variables
 .env
-stamps.db
+product.db
 
 # Python
 __pycache__/

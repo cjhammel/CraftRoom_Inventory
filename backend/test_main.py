@@ -13,7 +13,7 @@ from app.main import app
 
 @pytest.fixture
 def client(tmp_path):
-    test_db_path = tmp_path / "test_stamps.db"
+    test_db_path = tmp_path / "test_product.db"
     test_engine = create_engine(
         f"sqlite:///{test_db_path}",
         connect_args={"check_same_thread": False},
@@ -59,6 +59,9 @@ def test_create_stamp(client):
     assert body["product_name"] == "Test Stamp"
     assert body["brand_name"] == "Test Brand"
     assert body["id"] is not None
+    assert body["location_id"] is not None
+    assert body["location"] == "Box 1"
+    assert body["cabinet"] == "Box 1"
 
 
 def test_list_stamps(client):
@@ -152,6 +155,8 @@ def test_search_stamps(client):
     stamps = response.json()
     assert len(stamps) == 1
     assert stamps[0]["location"] == "Album A"
+    assert stamps[0]["location_id"] is not None
+    assert stamps[0]["cabinet"] == "Album A"
 
 
 def test_invalid_image_upload(client):

@@ -74,7 +74,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 | Variable | Description | Default |
 |---|---|---|
-| `DATABASE_URL` | SQLite database path | `sqlite:///../stamps.db` |
+| `DATABASE_URL` | SQLite database path | `sqlite:///../product.db` |
 | `UPLOAD_DIR` | Directory for uploaded images | `uploads` |
 | `FRONTEND_ORIGIN` | CORS allowed origin | `http://localhost:3000` |
 | `AI_API_URL` | llama.cpp / Ollama server URL | _(empty)_ |

@@ -1,7 +1,43 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
-from app.models import Stamp
+from app.models import Location, Stamp
 from typing import Optional, List, Dict, Any
+
+
+def _clean_location_part(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
+def _normalize_location_data(location_data: Any) -> Dict[str, Optional[str]]:
+    if isinstance(location_data, dict):
+        return {
+            "cabinet": _clean_location_part(location_data.get("cabinet")),
+            "shelf": _clean_location_part(location_data.get("shelf")),
+            "bin": _clean_location_part(location_data.get("bin")),
+        }
+    return {
+        "cabinet": _clean_location_part(location_data),
+        "shelf": None,
+        "bin": None,
+    }
+
+
+def _get_or_create_location(db: Session, location_data: Any) -> Optional[Location]:
+    values = _normalize_location_data(location_data)
+    if not any(values.values()):
+        return None
+
+    location = db.query(Location).filter_by(**values).first()
+    if location:
+        return location
+
+    location = Location(**values)
+    db.add(location)
+    db.flush()
+    return location
 
 
 def get_stamp(db: Session, stamp_id: int) -> Optional[Stamp]:
@@ -35,7 +71,14 @@ def get_stamps(
         query = query.filter(Stamp.theme.ilike(f"%{theme}%"))
 
     if location:
-        query = query.filter(Stamp.location.ilike(f"%{location}%"))
+        location_term = f"%{location}%"
+        query = query.join(Stamp.storage_location).filter(
+            or_(
+                Location.cabinet.ilike(location_term),
+                Location.shelf.ilike(location_term),
+                Location.bin.ilike(location_term),
+            )
+        )
 
     if sentiments:
         sentiment_terms = [t.strip().lower() for t in sentiments.split() if t.strip()]
@@ -47,6 +90,11 @@ def get_stamps(
 
 
 def create_stamp(db: Session, stamp_data: Dict[str, Any]) -> Stamp:
+    location_data = stamp_data.pop("location", None)
+    if location_data is not None:
+        location = _get_or_create_location(db, location_data)
+        stamp_data["location_id"] = location.id if location else None
+
     db_stamp = Stamp(**stamp_data)
     db.add(db_stamp)
     db.commit()
@@ -58,6 +106,10 @@ def update_stamp(db: Session, stamp_id: int, stamp_data: Dict[str, Any]) -> Opti
     db_stamp = get_stamp(db, stamp_id)
     if not db_stamp:
         return None
+
+    if "location" in stamp_data:
+        location = _get_or_create_location(db, stamp_data.pop("location"))
+        db_stamp.location_id = location.id if location else None
 
     for key, value in stamp_data.items():
         if value is not None:

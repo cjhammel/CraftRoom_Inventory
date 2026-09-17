@@ -121,6 +121,9 @@ async def create_stamp_endpoint(
     shape_descriptor: Optional[str] = Form(None),
     sentiments: Optional[str] = Form(None),
     location: Optional[str] = Form(None),
+    cabinet: Optional[str] = Form(None),
+    shelf: Optional[str] = Form(None),
+    bin: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -138,8 +141,12 @@ async def create_stamp_endpoint(
         "theme": theme,
         "shape_descriptor": shape_descriptor,
         "sentiments": sentiments,
-        "location": location,
     }
+    location_parts = {"cabinet": cabinet, "shelf": shelf, "bin": bin}
+    if any(value is not None for value in location_parts.values()):
+        stamp_data["location"] = location_parts
+    else:
+        stamp_data["location"] = location
 
     # Handle image upload
     if image and image.filename:
@@ -194,6 +201,9 @@ async def update_stamp_endpoint(
     shape_descriptor: Optional[str] = Form(None),
     sentiments: Optional[str] = Form(None),
     location: Optional[str] = Form(None),
+    cabinet: Optional[str] = Form(None),
+    shelf: Optional[str] = Form(None),
+    bin: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -223,7 +233,10 @@ async def update_stamp_endpoint(
         stamp_data["shape_descriptor"] = shape_descriptor
     if sentiments is not None:
         stamp_data["sentiments"] = sentiments
-    if location is not None:
+    location_parts = {"cabinet": cabinet, "shelf": shelf, "bin": bin}
+    if any(value is not None for value in location_parts.values()):
+        stamp_data["location"] = location_parts
+    elif location is not None:
         stamp_data["location"] = location
 
     # Handle image upload
