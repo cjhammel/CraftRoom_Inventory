@@ -194,79 +194,99 @@
 
 | # | Requirement | Status | Notes |
 |---|---|---|---|
-| 1 | Data model (SQLite) | ✅ Complete | `product` table linked to `location` table, `create_all()` on startup |
-| 2 | REST API | ✅ Complete | All CRUD endpoints + search/filter working |
-| 2a | GET /stamps with filters | ✅ Complete | Supports `q`, `brand_name`, `theme`, linked `location`, `sentiments` params |
+| 1 | Data model (SQLite) | ✅ Complete | `product` table + `location` table, `create_all()` on startup |
+| 1a | `item_number` field | ✅ Added | Extra field not in original spec |
+| 2 | REST API | ✅ Complete | All CRUD + search/filter + location management |
+| 2a | GET /stamps with filters | ✅ Complete | `q`, `brand_name`, `product_type`, `theme`, `location`, `sentiments` |
 | 2b | GET /stamps/{id} | ✅ Complete | Returns 404 for missing stamps |
 | 2c | POST /stamps | ✅ Complete | multipart/form-data, image upload, validation |
 | 2d | PUT /stamps/{id} | ✅ Complete | Partial updates, optional image replacement |
 | 2e | DELETE /stamps/{id} | ✅ Complete | Removes stamp and associated image file |
-| 2f | POST /ai/analyze-image | ✅ Complete | Ollama/llama.cpp compatible endpoint with retry logic |
-| 3 | Image upload & resizing | ✅ Complete | ffmpeg resize to <=1MB, no upscaling, safe filenames |
-| 4 | AI image analysis | ✅ Complete | Optional, non-blocking, auto-detects API type, 3x retry |
+| 2f | POST /ai/analyze-image | ✅ Complete | Ollama/llama.cpp compatible, runtime config override |
+| 2g | Location CRUD | ✅ Added | GET/POST/PUT /locations for managing storage locations |
+| 2h | AI config endpoints | ✅ Added | GET /api/config, PUT /api/config/ai — save to config.yaml |
+| 3 | Image upload & resizing | ✅ Complete | ffmpeg resize to ≤1MB, no upscaling, UUID safe filenames |
+| 4 | AI image analysis | ✅ Complete | Optional, non-blocking, auto-detects API type, 3x retry, markdown JSON extraction |
 | 5 | Frontend UI | ✅ Complete | React + Vite, responsive, polished |
 | 5a | List view (card grid) | ✅ Complete | Thumbnails, metadata display |
-| 5b | Search & filters | ✅ Complete | Real-time search, brand/theme/location/sentiments filters, clear button |
+| 5b | Search & filters | ✅ Complete | Search bar, brand/product type/theme/location/sentiments filters, clear button |
 | 5c | Detail view | ✅ Complete | Full stamp info, large image, Edit/Delete buttons |
 | 5d | Add/Edit form | ✅ Complete | Reusable component, all fields, image preview, rotation controls |
 | 5e | Analyze Image button | ✅ Complete | Auto-populates fields from AI response |
 | 5f | Client-side validation | ✅ Complete | Required product_name |
 | 5g | Delete confirmation modal | ✅ Complete | Modal overlay with cancel/confirm |
-| 5h | Image rotation | ✅ Complete | Rotate left/right buttons with canvas-based transformation |
-| 6 | Project structure | ✅ Complete | Matches spec with minor adjustments |
-| 7 | Environment config | ✅ Complete | `.env.example` with all variables |
-| 8 | Setup & run | ✅ Complete | Backend port 8000, frontend port 3000, CORS configured |
-| 9 | Tests | ✅ Complete | 18 tests passing (see below) |
+| 5h | Image rotation | ✅ Complete | Canvas-based left/right rotation |
+| 5i | Settings page | ✅ Added | Tabs for Locations management and AI server configuration |
+| 6 | Project structure | ✅ Complete | Uses `config/config.yaml`, `data/` subdirectory for DB/uploads |
+| 7 | Environment config | ✅ Complete | `.env.example` + YAML config with env var override |
+| 8 | Setup & run | ✅ Complete | Backend port 8000, frontend port 3000, CORS configured, startup scripts |
+| 9 | Tests | ✅ Complete | 20 tests passing (see below) |
 | 10a | Drag-and-drop upload | ✅ Complete | Visual feedback, drop zone highlighting |
-| 10b | Error logging | ✅ Complete | Comprehensive logging to `backend/logs/app.log` |
+| 10b | Error logging | ✅ Complete | All endpoints log to `backend/logs/app.log` with stack traces |
 
-### Test Coverage
+### Test Coverage (20 tests)
 
-- ✅ create stamp
-- ✅ list stamps
-- ✅ retrieve stamp by ID
-- ✅ missing stamp returns 404
-- ✅ update stamp
-- ✅ delete stamp
-- ✅ missing stamp delete returns 404
-- ✅ search/filter stamps
-- ✅ invalid image upload returns 400
-- ✅ empty product_name validation
-- ✅ AI not configured returns 501
-- ✅ image upload and resize (≤ 1MB verification)
-- ✅ small image preservation (no upscaling)
-- ✅ AI analysis with real image (http://framework.gruru.net:11434)
-- ✅ AI analysis with mock response
+- ✅ test_create_stamp
+- ✅ test_list_stamps
+- ✅ test_create_and_update_location
+- ✅ test_create_stamp_with_location_id
+- ✅ test_get_stamp_by_id
+- ✅ test_get_stamp_404
+- ✅ test_update_stamp
+- ✅ test_delete_stamp
+- ✅ test_delete_stamp_404
+- ✅ test_search_stamps
+- ✅ test_invalid_image_upload
+- ✅ test_create_stamp_empty_product_name
+- ✅ test_update_stamp_404
+- ✅ test_update_stamp_empty_product_name
+- ✅ test_ai_analyze_not_configured
+- ✅ test_image_upload_and_resize
+- ✅ test_image_upload_preserves_small_images
+- ✅ test_ai_analyze_with_real_image
+- ✅ test_ai_analyze_with_mock_response
+- ✅ test_ai_analyze_uses_request_configuration
 
 ### Additional Features Added
 
-- **AI integration**: Configured for Ollama/llama.cpp at `http://framework.gruru.net:11434` with `qwen3.6:35B` model, auto-detects API type
+- **AI integration**: Ollama + OpenAI-compatible auto-detection, markdown JSON extraction, 3x retry with backoff, runtime config override via form params, config saved to `config/config.yaml`
+- **Config endpoints**: `GET /api/config` (read full config), `PUT /api/config/ai` (update AI settings) — accessible from frontend Settings page
 - **Comprehensive error logging**: All endpoints log requests, errors with stack traces to `backend/logs/app.log`
 - **Drag-and-drop image upload**: Visual feedback with highlight effect when dragging files
-- **Arch Linux installation instructions**: Added to README.md
-- **Pillow dependency**: Used in tests for creating test images
-- **`.gitignore`**: Excludes `.env`, `product.db`, `venv/`, `logs/`, uploads
-- **Theme filter**: Replaced product_type with theme in search filters (backend + frontend)
-- **Clear search button**: Added button to reset all search filters in frontend
-- **Multi-word sentiments search**: Splits sentiments query on spaces, matches any term
-- **Absolute database path**: `product.db` path resolved relative to project root, prevents overwrite on restart
+- **Location management**: Full CRUD for storage locations (cabinet/shelf/bin) via Settings page
+- **Startup scripts**: `start-backend.sh` and `start-frontend.sh` with colored output, version checks, auto-venv setup
+- **YAML-based config**: `config/config.yaml` with env var override via `app.config` module
+- **`.gitignore`**: Excludes `.env`, `config/.env`, `*.db`, `venv/`, `logs/`, `node_modules/`, `frontend/dist/`
+- **Clear search button**: Reset all search filters in frontend
+- **AI settings persistence**: AI server URL, model, and prompt saved to `config/config.yaml` and editable from the UI
+
+### Config System
+
+The app uses a two-layer config system:
+1. **`config/config.yaml`** — Primary config file (database, paths, server, AI, image settings)
+2. **`.env` / environment variables** — Override values from config.yaml (sensitive values like API keys)
+
+The config module (`app/config.py`) checks env vars first, then falls back to `config.yaml` values.
 
 ### Environment Variables
 
 | Variable | Default | Description |
 |---|---|---|
-| `DATABASE_URL` | `sqlite:///product.db` (absolute) | SQLite database path (resolved to project root) |
-| `UPLOAD_DIR` | `uploads` | Directory for uploaded images |
+| `DATABASE_URL` | `sqlite:///data/product.db` (resolved to project root) | SQLite database path |
+| `UPLOAD_DIR` | `data/uploads` (resolved to project root) | Directory for uploaded images |
 | `FRONTEND_ORIGIN` | `http://localhost:3000` | CORS allowed origin |
-| `AI_API_URL` | `http://framework.gruru.net:11434` | Ollama/llama.cpp server URL (supports `/v1` path) |
-| `AI_API_KEY` | _(empty)_ | API key (optional for local servers, triggers OpenAI-compatible mode) |
+| `AI_API_URL` | _(from config.yaml)_ | Ollama/llama.cpp/llama.cpp server URL |
+| `AI_API_KEY` | _(empty)_ | API key (triggers OpenAI-compatible mode when set) |
 | `AI_MODEL` | `qwen3.6:35B` | Model name for AI analysis |
-| `AI_PROMPT` | _(default prompt)_ | Custom AI analysis prompt with JSON schema |
+| `AI_PROMPT` | _(from config.yaml)_ | Custom AI analysis prompt with JSON schema |
+| `PROJECT_ROOT` | _(auto-resolved)_ | Override for database/upload path resolution |
 
 ### AI Endpoint Behavior
 
-- Auto-detects API type: OpenAI-compatible (`/v1/chat/completions`) if URL contains `/v1` or `AI_API_KEY` is set; otherwise uses Ollama (`/api/chat`)
-- Strips trailing `/v1` from `AI_API_URL` to prevent duplicate path segments
-- Returns 501 with clear message if `AI_API_URL` not configured
-- Implements 3x retry logic for empty content responses
-- Logs full response and parsing errors to `backend/logs/app.log` for debugging
+- **API type auto-detection**: OpenAI-compatible (`/v1/chat/completions`) if URL contains `/v1` or `AI_API_KEY` is set; otherwise Ollama (`/api/chat`)
+- **Path normalization**: Strips trailing `/v1` from `AI_API_URL` to prevent duplicate path segments
+- **Runtime config override**: Frontend can pass `ai_api_url` and `ai_prompt` form fields to override server defaults per-request
+- **501 response**: Clear JSON message if `AI_API_URL` not configured in either env or config.yaml
+- **3x retry**: Retries on empty content responses and HTTP errors with 1-second backoff
+- **Markdown JSON extraction**: Parses ```json code blocks from LLM responses
+- **Logging**: Full request/response logging to `backend/logs/app.log` for debugging
