@@ -31,7 +31,7 @@ def generate_safe_filename(original_filename: str) -> str:
 
 
 def resize_image(input_path: str, output_path: str) -> str:
-    """Resize image to 2000px wide if larger than MAX_FILE_SIZE, preserving aspect ratio."""
+    """Reduce image file size if larger than MAX_FILE_SIZE using quality compression (-q:v 4)."""
     input_size = os.path.getsize(input_path)
     input_size_mb = input_size / 1_000_000
 
@@ -52,8 +52,7 @@ def resize_image(input_path: str, output_path: str) -> str:
     try:
         cmd = [
             "ffmpeg", "-i", input_path,
-            "-vf", "scale=2000:-1",
-            "-update", "1",
+            "-q:v", "4",
             "-y",
             tmp_path,
         ]
@@ -80,6 +79,6 @@ def resize_image(input_path: str, output_path: str) -> str:
     output_size = os.path.getsize(output_path)
     output_size_mb = output_size / 1_000_000
     reduction = ((input_size - output_size) / input_size) * 100
-    logger.info(f"Image {os.path.basename(input_path)}: scaled 2000px wide — {input_size_mb:.2f} MB → {output_size_mb:.2f} MB ({reduction:.0f}% reduction)")
+    logger.info(f"Image {os.path.basename(input_path)}: compressed q:v 4 — {input_size_mb:.2f} MB → {output_size_mb:.2f} MB ({reduction:.0f}% reduction)")
 
     return output_path
