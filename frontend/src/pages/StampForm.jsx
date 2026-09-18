@@ -8,6 +8,7 @@ function StampForm() {
   const navigate = useNavigate()
   const isEdit = !!id
   const fileInputRef = useRef(null)
+  const sentimentsTextareaRef = useRef(null)
 
   const [form, setForm] = useState({
     product_name: '',
@@ -39,6 +40,15 @@ function StampForm() {
       fetchStamp()
     }
   }, [id])
+
+  // Auto-grow sentiments textarea when value changes
+  useEffect(() => {
+    const textarea = sentimentsTextareaRef.current
+    if (textarea) {
+      textarea.style.height = 'auto'
+      textarea.style.height = textarea.scrollHeight + 'px'
+    }
+  }, [form.sentiments])
 
   const fetchLocations = async () => {
     setLocationsLoading(true)
@@ -435,12 +445,19 @@ function StampForm() {
 
         <div className="form-group">
           <label>Sentiments</label>
-          <input
-            type="text"
+          <textarea
+            ref={sentimentsTextareaRef}
             name="sentiments"
             value={form.sentiments}
             onChange={handleChange}
             placeholder="e.g. Hello, Goodbye"
+            rows={3}
+            style={{
+              resize: 'vertical',
+              overflowWrap: 'break-word',
+              wordWrap: 'break-word',
+              whiteSpace: 'pre-wrap',
+            }}
           />
         </div>
 
