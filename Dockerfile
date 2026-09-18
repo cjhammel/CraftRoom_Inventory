@@ -22,7 +22,6 @@ RUN uv pip install --system -r /app/backend/requirements.txt
 
 # Copy application code
 COPY backend/app /app/backend/app
-COPY backend/data /app/backend/data
 COPY config /app/config
 
 # Copy frontend source and built files
