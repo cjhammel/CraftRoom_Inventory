@@ -33,8 +33,26 @@ logger = logging.getLogger("craftroom")
 
 from app.database import get_db, init_db
 from app.models import Stamp
-from app.schemas import StampCreate, StampUpdate, StampResponse, AIAnalysisRequest
-from app.crud import get_stamp, get_stamps, create_stamp, update_stamp, delete_stamp
+from app.schemas import (
+    AIAnalysisRequest,
+    LocationCreate,
+    LocationResponse,
+    LocationUpdate,
+    StampCreate,
+    StampResponse,
+    StampUpdate,
+)
+from app.crud import (
+    create_location,
+    create_stamp,
+    delete_stamp,
+    get_location,
+    get_locations,
+    get_stamp,
+    get_stamps,
+    update_location,
+    update_stamp,
+)
 from app.image_utils import validate_image_file, generate_safe_filename, resize_image, UPLOAD_DIR
 
 app = FastAPI(title="CraftRoom Product Inventory")
@@ -54,6 +72,15 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 
+def _parse_location_id(location_id: Optional[str]) -> Optional[int]:
+    if location_id is None or not str(location_id).strip():
+        return None
+    try:
+        return int(location_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="location_id must be an integer")
+
+
 @app.on_event("startup")
 def startup():
     logger.info("Starting CraftRoom Product Inventory backend")
@@ -65,6 +92,42 @@ def startup():
 
 
 # --- Stamp CRUD endpoints ---
+
+
+@app.get("/locations", response_model=list[LocationResponse])
+def list_locations(db: Session = Depends(get_db)):
+    try:
+        return get_locations(db)
+    except Exception as e:
+        logger.error(f"Error listing locations: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to list locations")
+
+
+@app.post("/locations", response_model=LocationResponse)
+def create_location_endpoint(location: LocationCreate, db: Session = Depends(get_db)):
+    try:
+        return create_location(db, location.model_dump())
+    except Exception as e:
+        logger.error(f"Error creating location: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to create location")
+
+
+@app.put("/locations/{location_id}", response_model=LocationResponse)
+def update_location_endpoint(
+    location_id: int,
+    location: LocationUpdate,
+    db: Session = Depends(get_db),
+):
+    try:
+        updated = update_location(db, location_id, location.model_dump())
+        if not updated:
+            raise HTTPException(status_code=404, detail="Location not found")
+        return updated
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating location {location_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to update location")
 
 
 @app.get("/stamps", response_model=list[StampResponse])
@@ -115,12 +178,14 @@ def get_stamp_by_id(stamp_id: int, db: Session = Depends(get_db)):
 @app.post("/stamps", response_model=StampResponse)
 async def create_stamp_endpoint(
     product_name: Optional[str] = Form(None),
+    item_number: Optional[str] = Form(None),
     brand_name: Optional[str] = Form(None),
     product_type: Optional[str] = Form(None),
     theme: Optional[str] = Form(None),
     shape_descriptor: Optional[str] = Form(None),
     sentiments: Optional[str] = Form(None),
     location: Optional[str] = Form(None),
+    location_id: Optional[str] = Form(None),
     cabinet: Optional[str] = Form(None),
     shelf: Optional[str] = Form(None),
     bin: Optional[str] = Form(None),
@@ -136,17 +201,24 @@ async def create_stamp_endpoint(
 
     stamp_data = {
         "product_name": product_name.strip(),
+        "item_number": item_number,
         "brand_name": brand_name,
         "product_type": product_type,
         "theme": theme,
         "shape_descriptor": shape_descriptor,
         "sentiments": sentiments,
     }
-    location_parts = {"cabinet": cabinet, "shelf": shelf, "bin": bin}
-    if any(value is not None for value in location_parts.values()):
-        stamp_data["location"] = location_parts
+    parsed_location_id = _parse_location_id(location_id)
+    if parsed_location_id is not None:
+        if not get_location(db, parsed_location_id):
+            raise HTTPException(status_code=400, detail="location_id does not exist")
+        stamp_data["location_id"] = parsed_location_id
     else:
-        stamp_data["location"] = location
+        location_parts = {"cabinet": cabinet, "shelf": shelf, "bin": bin}
+        if any(value is not None for value in location_parts.values()):
+            stamp_data["location"] = location_parts
+        elif location is not None:
+            stamp_data["location"] = location
 
     # Handle image upload
     if image and image.filename:
@@ -195,12 +267,14 @@ async def update_stamp_endpoint(
     request: Request,
     stamp_id: int,
     product_name: Optional[str] = Form(None),
+    item_number: Optional[str] = Form(None),
     brand_name: Optional[str] = Form(None),
     product_type: Optional[str] = Form(None),
     theme: Optional[str] = Form(None),
     shape_descriptor: Optional[str] = Form(None),
     sentiments: Optional[str] = Form(None),
     location: Optional[str] = Form(None),
+    location_id: Optional[str] = Form(None),
     cabinet: Optional[str] = Form(None),
     shelf: Optional[str] = Form(None),
     bin: Optional[str] = Form(None),
@@ -223,6 +297,8 @@ async def update_stamp_endpoint(
             logger.warning(f"Empty product_name received for stamp {stamp_id}")
             raise HTTPException(status_code=400, detail="product_name is required and cannot be empty")
         stamp_data["product_name"] = product_name.strip()
+    if item_number is not None:
+        stamp_data["item_number"] = item_number
     if brand_name is not None:
         stamp_data["brand_name"] = brand_name
     if product_type is not None:
@@ -233,11 +309,17 @@ async def update_stamp_endpoint(
         stamp_data["shape_descriptor"] = shape_descriptor
     if sentiments is not None:
         stamp_data["sentiments"] = sentiments
-    location_parts = {"cabinet": cabinet, "shelf": shelf, "bin": bin}
-    if any(value is not None for value in location_parts.values()):
-        stamp_data["location"] = location_parts
-    elif location is not None:
-        stamp_data["location"] = location
+    if location_id is not None:
+        parsed_location_id = _parse_location_id(location_id)
+        if parsed_location_id is not None and not get_location(db, parsed_location_id):
+            raise HTTPException(status_code=400, detail="location_id does not exist")
+        stamp_data["location_id"] = parsed_location_id
+    else:
+        location_parts = {"cabinet": cabinet, "shelf": shelf, "bin": bin}
+        if any(value is not None for value in location_parts.values()):
+            stamp_data["location"] = location_parts
+        elif location is not None:
+            stamp_data["location"] = location
 
     # Handle image upload
     if image and image.filename:

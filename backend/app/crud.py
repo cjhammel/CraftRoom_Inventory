@@ -40,6 +40,45 @@ def _get_or_create_location(db: Session, location_data: Any) -> Optional[Locatio
     return location
 
 
+def get_location(db: Session, location_id: int) -> Optional[Location]:
+    return db.query(Location).filter(Location.id == location_id).first()
+
+
+def get_locations(db: Session) -> List[Location]:
+    return (
+        db.query(Location)
+        .order_by(Location.cabinet.asc(), Location.shelf.asc(), Location.bin.asc())
+        .all()
+    )
+
+
+def create_location(db: Session, location_data: Dict[str, Optional[str]]) -> Location:
+    values = _normalize_location_data(location_data)
+    location = Location(**values)
+    db.add(location)
+    db.commit()
+    db.refresh(location)
+    return location
+
+
+def update_location(
+    db: Session,
+    location_id: int,
+    location_data: Dict[str, Optional[str]],
+) -> Optional[Location]:
+    location = get_location(db, location_id)
+    if not location:
+        return None
+
+    values = _normalize_location_data(location_data)
+    for key, value in values.items():
+        setattr(location, key, value)
+
+    db.commit()
+    db.refresh(location)
+    return location
+
+
 def get_stamp(db: Session, stamp_id: int) -> Optional[Stamp]:
     return db.query(Stamp).filter(Stamp.id == stamp_id).first()
 
@@ -58,7 +97,9 @@ def get_stamps(
     if search:
         search_term = f"%{search}%"
         query = query.filter(
-            (Stamp.product_name.ilike(search_term)) | (Stamp.brand_name.ilike(search_term))
+            (Stamp.product_name.ilike(search_term))
+            | (Stamp.brand_name.ilike(search_term))
+            | (Stamp.item_number.ilike(search_term))
         )
 
     if brand_name:
@@ -112,7 +153,7 @@ def update_stamp(db: Session, stamp_id: int, stamp_data: Dict[str, Any]) -> Opti
         db_stamp.location_id = location.id if location else None
 
     for key, value in stamp_data.items():
-        if value is not None:
+        if key == "location_id" or value is not None:
             setattr(db_stamp, key, value)
 
     db.commit()

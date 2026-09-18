@@ -48,6 +48,7 @@ function StampDetail() {
   }
 
   const fields = [
+    { label: 'Item Number', value: stamp.item_number },
     { label: 'Brand', value: stamp.brand_name },
     { label: 'Product Type', value: stamp.product_type },
     { label: 'Theme', value: stamp.theme },
@@ -60,8 +61,8 @@ function StampDetail() {
     <div className="detail-view">
       <div className="detail-header">
         <h1>{stamp.product_name}</h1>
-        <div>
-          <Link to={`/edit/${stamp.id}`} className="btn btn-primary" style={{ marginRight: '8px' }}>
+        <div className="detail-actions">
+          <Link to={`/edit/${stamp.id}`} className="btn btn-primary">
             Edit
           </Link>
           <button onClick={() => setShowDelete(true)} className="btn btn-danger">

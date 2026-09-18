@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { AI_API_URL_KEY, AI_PROMPT_KEY } from './Settings'
 import '../App.css'
 
@@ -13,14 +13,18 @@ function StampForm() {
 
   const [form, setForm] = useState({
     product_name: '',
+    item_number: '',
     brand_name: '',
     product_type: '',
     theme: '',
     shape_descriptor: '',
     sentiments: '',
-    location: '',
+    location_id: '',
   })
 
+  const [locations, setLocations] = useState([])
+  const [locationsLoading, setLocationsLoading] = useState(true)
+  const [locationError, setLocationError] = useState(null)
   const [imageFile, setImageFile] = useState(null)
   const [rotatedFile, setRotatedFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
@@ -32,10 +36,31 @@ function StampForm() {
   const [aiError, setAiError] = useState(null)
 
   useEffect(() => {
+    fetchLocations()
     if (isEdit) {
       fetchStamp()
     }
   }, [id])
+
+  const fetchLocations = async () => {
+    setLocationsLoading(true)
+    setLocationError(null)
+
+    try {
+      const response = await fetch('/api/locations')
+      if (!response.ok) throw new Error('Failed to load locations')
+      setLocations(await response.json())
+    } catch (err) {
+      setLocationError(err.message)
+    } finally {
+      setLocationsLoading(false)
+    }
+  }
+
+  const formatLocation = (location) => {
+    const label = [location.cabinet, location.shelf, location.bin].filter(Boolean).join(' / ')
+    return label || `Location #${location.id}`
+  }
 
   const fetchStamp = async () => {
     setLoading(true)
@@ -45,12 +70,13 @@ function StampForm() {
       const stamp = await response.json()
       setForm({
         product_name: stamp.product_name || '',
+        item_number: stamp.item_number || '',
         brand_name: stamp.brand_name || '',
         product_type: stamp.product_type || '',
         theme: stamp.theme || '',
         shape_descriptor: stamp.shape_descriptor || '',
         sentiments: stamp.sentiments || '',
-        location: stamp.location || '',
+        location_id: stamp.location_id ? String(stamp.location_id) : '',
       })
       setImagePreview(stamp.image_url ? `${API_URL}${stamp.image_url}` : null)
     } catch (err) {
@@ -238,12 +264,13 @@ function StampForm() {
 
     const formData = new FormData()
     formData.append('product_name', form.product_name)
+    if (isEdit || form.item_number) formData.append('item_number', form.item_number)
     if (form.brand_name) formData.append('brand_name', form.brand_name)
     if (form.product_type) formData.append('product_type', form.product_type)
     if (form.theme) formData.append('theme', form.theme)
     if (form.shape_descriptor) formData.append('shape_descriptor', form.shape_descriptor)
     if (form.sentiments) formData.append('sentiments', form.sentiments)
-    if (form.location) formData.append('location', form.location)
+    if (isEdit || form.location_id) formData.append('location_id', form.location_id)
     if (rotatedFile) formData.append('image', rotatedFile)
     else if (imageFile) formData.append('image', imageFile)
 
@@ -351,6 +378,17 @@ function StampForm() {
           {errors.product_name && <div className="error">{errors.product_name}</div>}
         </div>
 
+        <div className="form-group">
+          <label>Item Number</label>
+          <input
+            type="text"
+            name="item_number"
+            value={form.item_number}
+            onChange={handleChange}
+            placeholder="e.g. ITEM-001"
+          />
+        </div>
+
         <div className="form-row">
           <div className="form-group">
             <label>Brand Name</label>
@@ -410,13 +448,27 @@ function StampForm() {
 
         <div className="form-group">
           <label>Storage Location</label>
-          <input
-            type="text"
-            name="location"
-            value={form.location}
+          <select
+            name="location_id"
+            value={form.location_id}
             onChange={handleChange}
-            placeholder="e.g. Box 1, Album A"
-          />
+            disabled={locationsLoading || !!locationError}
+          >
+            <option value="">
+              {locationsLoading ? 'Loading locations...' : 'No location'}
+            </option>
+            {locations.map((location) => (
+              <option key={location.id} value={location.id}>
+                {formatLocation(location)}
+              </option>
+            ))}
+          </select>
+          {locationError && <div className="error">{locationError}</div>}
+          {!locationsLoading && !locationError && locations.length === 0 && (
+            <p className="field-help">
+              Add locations in <Link to="/settings">Configuration</Link> to select one here.
+            </p>
+          )}
         </div>
 
         <div className="form-actions">

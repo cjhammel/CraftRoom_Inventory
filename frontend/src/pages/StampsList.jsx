@@ -19,17 +19,17 @@ function StampsList() {
     fetchStamps()
   }, [])
 
-  const fetchStamps = async () => {
+  const fetchStamps = async (filters = { search, brand, productType, theme, location, sentiments }) => {
     setLoading(true)
     setError(null)
     try {
       const params = new URLSearchParams()
-      if (search) params.set('q', search)
-      if (brand) params.set('brand_name', brand)
-      if (productType) params.set('product_type', productType)
-      if (theme) params.set('theme', theme)
-      if (location) params.set('location', location)
-      if (sentiments) params.set('sentiments', sentiments)
+      if (filters.search) params.set('q', filters.search)
+      if (filters.brand) params.set('brand_name', filters.brand)
+      if (filters.productType) params.set('product_type', filters.productType)
+      if (filters.theme) params.set('theme', filters.theme)
+      if (filters.location) params.set('location', filters.location)
+      if (filters.sentiments) params.set('sentiments', filters.sentiments)
 
       const url = `/api/stamps${params.toString() ? '?' + params.toString() : ''}`
       const response = await fetch(url)
@@ -48,6 +48,25 @@ function StampsList() {
     fetchStamps()
   }
 
+  const handleClear = () => {
+    const emptyFilters = {
+      search: '',
+      brand: '',
+      productType: '',
+      theme: '',
+      location: '',
+      sentiments: '',
+    }
+
+    setSearch(emptyFilters.search)
+    setBrand(emptyFilters.brand)
+    setProductType(emptyFilters.productType)
+    setTheme(emptyFilters.theme)
+    setLocation(emptyFilters.location)
+    setSentiments(emptyFilters.sentiments)
+    fetchStamps(emptyFilters)
+  }
+
   if (loading) {
     return <div className="loading">Loading stamps...</div>
   }
@@ -63,7 +82,7 @@ function StampsList() {
       <form className="search-bar" onSubmit={handleSearch}>
         <input
           type="text"
-          placeholder="Search by name or brand..."
+          placeholder="Search by item, name, or brand..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -103,14 +122,7 @@ function StampsList() {
         <button
           type="button"
           className="btn btn-secondary"
-          onClick={() => {
-            setSearch('')
-            setBrand('')
-            setProductType('')
-            setTheme('')
-            setLocation('')
-            setSentiments('')
-          }}
+          onClick={handleClear}
         >
           Clear
         </button>
@@ -138,6 +150,9 @@ function StampsList() {
               )}
               <div className="stamp-card-body">
                 <div className="stamp-card-name">{stamp.product_name}</div>
+                {stamp.item_number && (
+                  <div className="stamp-card-brand">Item #{stamp.item_number}</div>
+                )}
                 {stamp.brand_name && (
                   <div className="stamp-card-brand">{stamp.brand_name}</div>
                 )}

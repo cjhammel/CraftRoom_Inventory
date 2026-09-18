@@ -22,6 +22,7 @@ class Stamp(Base):
     __tablename__ = "product"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    item_number = Column(String, nullable=True)
     product_name = Column(String, nullable=False)
     brand_name = Column(String, nullable=True)
     product_type = Column(String, nullable=True)
@@ -52,6 +53,7 @@ class Stamp(Base):
     def to_dict(self):
         return {
             "id": self.id,
+            "item_number": self.item_number,
             "product_name": self.product_name,
             "brand_name": self.brand_name,
             "product_type": self.product_type,

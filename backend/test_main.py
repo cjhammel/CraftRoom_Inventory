@@ -40,6 +40,7 @@ def client(tmp_path):
 
 def create_stamp(client, **kwargs):
     data = {
+        "item_number": "ITEM-001",
         "product_name": "Test Stamp",
         "brand_name": "Test Brand",
         "product_type": "Rubber",
@@ -49,7 +50,17 @@ def create_stamp(client, **kwargs):
         "location": "Box 1",
         **kwargs,
     }
-    return client.post("/stamps", data=data)
+    return client.post("/stamps", data={k: v for k, v in data.items() if v is not None})
+
+
+def create_location(client, **kwargs):
+    data = {
+        "cabinet": "Cabinet A",
+        "shelf": "Shelf 1",
+        "bin": "Bin 2",
+        **kwargs,
+    }
+    return client.post("/locations", json=data)
 
 
 def test_create_stamp(client):
@@ -57,6 +68,7 @@ def test_create_stamp(client):
     assert response.status_code == 200
     body = response.json()
     assert body["product_name"] == "Test Stamp"
+    assert body["item_number"] == "ITEM-001"
     assert body["brand_name"] == "Test Brand"
     assert body["id"] is not None
     assert body["location_id"] is not None
@@ -71,6 +83,40 @@ def test_list_stamps(client):
     stamps = response.json()
     assert len(stamps) >= 1
     assert stamps[0]["product_name"] == "Test Stamp"
+    assert stamps[0]["item_number"] == "ITEM-001"
+
+
+def test_create_and_update_location(client):
+    response = create_location(client)
+    assert response.status_code == 200
+    location = response.json()
+    assert location["cabinet"] == "Cabinet A"
+    assert location["shelf"] == "Shelf 1"
+    assert location["bin"] == "Bin 2"
+
+    response = client.put(
+        f"/locations/{location['id']}",
+        json={"cabinet": "Cabinet B", "shelf": "Shelf 3", "bin": None},
+    )
+    assert response.status_code == 200
+    location = response.json()
+    assert location["cabinet"] == "Cabinet B"
+    assert location["shelf"] == "Shelf 3"
+    assert location["bin"] is None
+
+    response = client.get("/locations")
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+
+
+def test_create_stamp_with_location_id(client):
+    location = create_location(client, cabinet="Drawer 1", shelf=None, bin=None).json()
+
+    response = create_stamp(client, location=None, location_id=str(location["id"]))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["location_id"] == location["id"]
+    assert body["location"] == "Drawer 1"
 
 
 def test_get_stamp_by_id(client):
@@ -93,11 +139,12 @@ def test_update_stamp(client):
 
     response = client.put(
         f"/stamps/{stamp_id}",
-        data={"brand_name": "Updated Brand"},
+        data={"brand_name": "Updated Brand", "item_number": "ITEM-002"},
     )
     assert response.status_code == 200
     body = response.json()
     assert body["brand_name"] == "Updated Brand"
+    assert body["item_number"] == "ITEM-002"
 
 
 def test_delete_stamp(client):
@@ -137,6 +184,12 @@ def test_search_stamps(client):
     stamps = response.json()
     assert len(stamps) == 1
     assert stamps[0]["product_name"] == "Blue Mauritius"
+
+    response = client.get("/stamps?q=ITEM-001")
+    assert response.status_code == 200
+    stamps = response.json()
+    assert len(stamps) >= 1
+    assert stamps[0]["item_number"] == "ITEM-001"
 
     response = client.get("/stamps?brand_name=StampCo")
     assert response.status_code == 200
