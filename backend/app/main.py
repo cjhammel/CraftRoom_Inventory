@@ -395,7 +395,7 @@ async def analyze_image(
     ai_api_url: Optional[str] = Form(None),
     ai_prompt: Optional[str] = Form(None),
 ):
-    logger.info(f"AI image analysis requested: {image.filename}")
+    logger.info(f"AI image analysis requested: filename={image.filename}, content_type={image.content_type}")
     ai_config = get_ai_config()
     request_ai_api_url = ai_api_url.strip() if ai_api_url else ""
     effective_ai_api_url = request_ai_api_url or (ai_config["api_url"] or "").strip()
@@ -423,22 +423,26 @@ async def analyze_image(
     # Save and scale temp file for AI
     temp_path = os.path.join(UPLOAD_DIR, f"temp_ai_{generate_safe_filename(image.filename)}")
     contents = await image.read()
+    original_size = len(contents)
     with open(temp_path, "wb") as f:
         f.write(contents)
+    logger.info(f"Saved uploaded image: {os.path.basename(temp_path)}, size={original_size:,} bytes ({original_size / 1_000_000:.2f} MB)")
 
     # Scale image if > 1MB
     resize_image(temp_path, temp_path)
 
     final_size = os.path.getsize(temp_path)
-    logger.info(f"Image size before AI analysis: {final_size / 1_000_000:.2f} MB")
+    logger.info(f"Image size before AI analysis: {final_size / 1_000_000:.2f} MB ({final_size:,} bytes)")
 
     if final_size > 1_500_000:
         logger.error(f"Image too large after resize ({final_size / 1_000_000:.2f} MB), AI analysis may fail")
 
+    logger.info(f"AI API URL: {effective_ai_api_url}, Model: {ai_config['model']}")
+
     try:
         logger.info(f"Calling AI API with model: {ai_config['model']}")
         suggestions = await call_ai_api(temp_path, ai_api_key, effective_ai_api_url, effective_ai_prompt)
-        logger.info(f"AI analysis completed successfully")
+        logger.info(f"AI analysis completed successfully, received {len(suggestions)} fields: {list(suggestions.keys())}")
         return {"suggestions": suggestions}
     except Exception as e:
         logger.error(f"AI analysis failed: {e}", exc_info=True)
@@ -447,6 +451,7 @@ async def analyze_image(
         if os.path.exists(temp_path):
             try:
                 os.remove(temp_path)
+                logger.debug(f"Cleaned up temp file: {os.path.basename(temp_path)}")
             except Exception as e:
                 logger.error(f"Error cleaning up temp AI file: {e}")
 
@@ -469,12 +474,16 @@ async def call_ai_api(
     ai_model = ai_config["model"]
     effective_ai_prompt = ai_prompt or ai_config["prompt"]
 
-    logger.info(f"Calling AI API: {ai_api_url} with model {ai_model}")
+    image_size = os.path.getsize(image_path)
+    image_size_mb = image_size / 1_000_000
+    logger.info(f"Loading image: {os.path.basename(image_path)}, size={image_size:,} bytes ({image_size_mb:.2f} MB)")
 
     # Read image and encode as base64
     import base64
     with open(image_path, "rb") as f:
         image_data = base64.b64encode(f.read()).decode("utf-8")
+    b64_size = len(image_data)
+    logger.info(f"Image encoded to base64: {b64_size:,} bytes ({b64_size / 1_000_000:.2f} MB)")
 
     # Determine MIME type
     ext = os.path.splitext(image_path)[1].lower()
@@ -487,6 +496,8 @@ async def call_ai_api(
     if base_url.endswith("/v1"):
         base_url = base_url[:-3]
     is_openai_compat = "/v1" in ai_api_url or bool(api_key)
+
+    logger.info(f"API detection: is_openai_compat={is_openai_compat}, base_url={base_url}")
 
     if is_openai_compat:
         # OpenAI-compatible endpoint (llama.cpp, vLLM, etc.)
@@ -507,6 +518,7 @@ async def call_ai_api(
             "stream": False,
         }
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        logger.info(f"Using OpenAI-compatible endpoint: {endpoint_url}")
     else:
         # Ollama /api/chat endpoint
         endpoint_url = f"{ai_api_url.rstrip('/')}/api/chat"
@@ -522,6 +534,7 @@ async def call_ai_api(
             "stream": False,
         }
         headers = {}
+        logger.info(f"Using Ollama endpoint: {endpoint_url}")
 
     import asyncio
     max_retries = 3
@@ -529,14 +542,21 @@ async def call_ai_api(
     for attempt in range(max_retries):
         try:
             async with httpx.AsyncClient(timeout=120) as client:
+                logger.info(f"AI API request attempt {attempt + 1}/{max_retries} to {endpoint_url}")
+                import time
+                start_time = time.time()
                 response = await client.post(
                     endpoint_url,
                     json=payload,
                     headers=headers,
                 )
+                elapsed = time.time() - start_time
+                logger.info(f"AI API response attempt {attempt + 1}/{max_retries}: status={response.status_code}, elapsed={elapsed:.2f}s")
                 response.raise_for_status()
                 result = response.json()
-                if result.get("choices", [{}])[0].get("message", {}).get("content"):
+                content = result.get("choices", [{}])[0].get("message", {}).get("content", "") if is_openai_compat else result.get("message", {}).get("content", "")
+                if content:
+                    logger.info(f"AI API returned content on attempt {attempt + 1}, length={len(content)} chars")
                     break
                 if attempt < max_retries - 1:
                     logger.warning(f"AI returned empty content on attempt {attempt + 1}, retrying...")
@@ -564,7 +584,7 @@ async def call_ai_api(
         content = result.get("message", {}).get("content", "")
         finish_reason = result.get("done", False)
     
-    logger.debug(f"AI raw response content length: {len(content)}, finish_reason: {finish_reason}")
+    logger.info(f"AI response parsed: content_length={len(content)}, finish_reason={finish_reason}")
     logger.debug(f"AI full response: {result}")
     
     if not content:
