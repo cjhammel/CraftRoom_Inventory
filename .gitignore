@@ -1,5 +1,6 @@
 # Environment variables
 .env
+config/.env
 product.db
 
 # Python
@@ -17,10 +18,9 @@ frontend/dist/
 
 # Database
 *.db
-
-# Uploads
-backend/uploads/*
-!backend/uploads/.gitkeep
+data/uploads/
+!data/uploads/.gitkeep
+data/stamps.db
 
 # IDE
 .vscode/

@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Query, Form, Request
 
 # Load .env file
-_env_path = Path(__file__).resolve().parents[1] / ".env"
+_env_path = Path(__file__).resolve().parents[2] / "config" / ".env"
 if _env_path.exists():
     load_dotenv(_env_path)
 from fastapi.middleware.cors import CORSMiddleware

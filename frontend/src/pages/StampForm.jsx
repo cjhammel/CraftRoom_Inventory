@@ -3,8 +3,6 @@ import { Link, useParams, useNavigate } from 'react-router-dom'
 import { AI_API_URL_KEY, AI_PROMPT_KEY } from './Settings'
 import '../App.css'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-
 function StampForm() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -78,7 +76,7 @@ function StampForm() {
         sentiments: stamp.sentiments || '',
         location_id: stamp.location_id ? String(stamp.location_id) : '',
       })
-      setImagePreview(stamp.image_url ? `${API_URL}${stamp.image_url}` : null)
+      setImagePreview(stamp.image_url || null)
     } catch (err) {
       alert(err.message)
       navigate('/')

@@ -2,8 +2,6 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import '../App.css'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-
 function StampsList() {
   const [stamps, setStamps] = useState([])
   const [loading, setLoading] = useState(true)
@@ -143,7 +141,7 @@ function StampsList() {
             <Link to={`/stamps/${stamp.id}`} key={stamp.id} className="stamp-card">
               {stamp.image_url && (
                 <img
-                  src={`${API_URL}${stamp.image_url}`}
+                  src={stamp.image_url}
                   alt={stamp.product_name}
                   className="stamp-card-image"
                 />

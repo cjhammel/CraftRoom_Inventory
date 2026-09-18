@@ -2,8 +2,6 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import '../App.css'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-
 function StampDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -74,7 +72,7 @@ function StampDetail() {
       {stamp.image_url && (
         <div className="detail-image-container">
           <img
-            src={`${API_URL}${stamp.image_url}`}
+            src={stamp.image_url}
             alt={stamp.product_name}
             className="detail-image"
           />

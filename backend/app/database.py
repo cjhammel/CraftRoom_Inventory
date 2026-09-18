@@ -4,7 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 _BASE_DIR = Path(__file__).resolve().parents[2]
-_DB_PATH = _BASE_DIR / "product.db"
+_DB_PATH = _BASE_DIR / "data" / "stamps.db"
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{_DB_PATH}")
 
 engine = create_engine(
