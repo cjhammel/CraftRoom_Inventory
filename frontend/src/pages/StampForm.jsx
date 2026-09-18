@@ -397,6 +397,31 @@ function StampForm() {
           />
         </div>
 
+        <div className="form-group">
+          <label>Storage Location</label>
+          <select
+            name="location_id"
+            value={form.location_id}
+            onChange={handleChange}
+            disabled={locationsLoading || !!locationError}
+          >
+            <option value="">
+              {locationsLoading ? 'Loading locations...' : 'No location'}
+            </option>
+            {locations.map((location) => (
+              <option key={location.id} value={location.id}>
+                {formatLocation(location)}
+              </option>
+            ))}
+          </select>
+          {locationError && <div className="error">{locationError}</div>}
+          {!locationsLoading && !locationError && locations.length === 0 && (
+            <p className="field-help">
+              Add locations in <Link to="/settings">Configuration</Link> to select one here.
+            </p>
+          )}
+        </div>
+
         <div className="form-row">
           <div className="form-group">
             <label>Brand Name</label>
@@ -459,31 +484,6 @@ function StampForm() {
               whiteSpace: 'pre-wrap',
             }}
           />
-        </div>
-
-        <div className="form-group">
-          <label>Storage Location</label>
-          <select
-            name="location_id"
-            value={form.location_id}
-            onChange={handleChange}
-            disabled={locationsLoading || !!locationError}
-          >
-            <option value="">
-              {locationsLoading ? 'Loading locations...' : 'No location'}
-            </option>
-            {locations.map((location) => (
-              <option key={location.id} value={location.id}>
-                {formatLocation(location)}
-              </option>
-            ))}
-          </select>
-          {locationError && <div className="error">{locationError}</div>}
-          {!locationsLoading && !locationError && locations.length === 0 && (
-            <p className="field-help">
-              Add locations in <Link to="/settings">Configuration</Link> to select one here.
-            </p>
-          )}
         </div>
 
         <div className="form-actions">
