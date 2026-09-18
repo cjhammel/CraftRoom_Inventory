@@ -429,6 +429,12 @@ async def analyze_image(
     # Scale image if > 1MB
     resize_image(temp_path, temp_path)
 
+    final_size = os.path.getsize(temp_path)
+    logger.info(f"Image size before AI analysis: {final_size / 1_000_000:.2f} MB")
+
+    if final_size > 1_500_000:
+        logger.error(f"Image too large after resize ({final_size / 1_000_000:.2f} MB), AI analysis may fail")
+
     try:
         logger.info(f"Calling AI API with model: {ai_config['model']}")
         suggestions = await call_ai_api(temp_path, ai_api_key, effective_ai_api_url, effective_ai_prompt)
@@ -519,6 +525,7 @@ async def call_ai_api(
 
     import asyncio
     max_retries = 3
+    last_error = None
     for attempt in range(max_retries):
         try:
             async with httpx.AsyncClient(timeout=120) as client:
@@ -535,12 +542,14 @@ async def call_ai_api(
                     logger.warning(f"AI returned empty content on attempt {attempt + 1}, retrying...")
                     await asyncio.sleep(1)
         except httpx.HTTPError as e:
+            last_error = f"HTTP error: {e}"
             logger.error(f"HTTP error calling AI API (attempt {attempt + 1}): {e}")
             if attempt < max_retries - 1:
                 await asyncio.sleep(1)
                 continue
             raise
         except Exception as e:
+            last_error = str(e)
             logger.error(f"Error calling AI API (attempt {attempt + 1}): {e}", exc_info=True)
             if attempt < max_retries - 1:
                 await asyncio.sleep(1)
@@ -559,7 +568,7 @@ async def call_ai_api(
     logger.debug(f"AI full response: {result}")
     
     if not content:
-        logger.warning("AI API returned empty content")
+        logger.error("AI API returned empty content after 3 attempts - check AI server logs and image format")
         return {}
 
     import json

@@ -492,3 +492,51 @@ def test_ai_analyze_resizes_large_image(client, monkeypatch):
     body = response.json()
     assert body["suggestions"]["product_name"] == "Resized AI Test"
     assert captured["size"] <= 1_000_000, f"Image sent to AI was not resized: {captured['size']:,} bytes"
+
+
+def test_ai_analyze_all_example_images_return_json(client, monkeypatch):
+    """Verify all example images return proper JSON from AI analysis."""
+    example_dir = os.path.join(PROJECT_ROOT, "example_image")
+    example_images = [f for f in os.listdir(example_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))]
+    example_images.sort()
+
+    expected_fields = {"product_name", "brand_name", "product_type", "theme", "shape_descriptor", "sentiments"}
+    image_results = {}
+
+    async def mock_call_ai_api(image_path, api_key=None, ai_api_url=None, ai_prompt=None):
+        file_size = os.path.getsize(image_path)
+        return {
+            "product_name": f"Test Product",
+            "brand_name": "Test Brand",
+            "product_type": "Rubber",
+            "theme": "Floral",
+            "shape_descriptor": "Round",
+            "sentiments": "Hello World",
+        }
+
+    from app import main
+    monkeypatch.setattr(main, "call_ai_api", mock_call_ai_api)
+    monkeypatch.delenv("AI_API_URL", raising=False)
+    monkeypatch.setenv("AI_API_KEY", "test-key")
+
+    for image_file in example_images:
+        image_path = os.path.join(example_dir, image_file)
+        if not os.path.exists(image_path):
+            continue
+
+        original_size = os.path.getsize(image_path)
+        image_results[image_file] = {"original_size": original_size}
+
+        with open(image_path, "rb") as f:
+            response = client.post(
+                "/ai/analyze-image",
+                files={"image": (image_file, f, "image/jpeg")},
+            )
+
+        assert response.status_code == 200, f"Failed for {image_file}: {response.status_code} - {response.text}"
+        body = response.json()
+        assert "suggestions" in body, f"No suggestions in response for {image_file}"
+        suggestions = body["suggestions"]
+
+        for field in expected_fields:
+            assert field in suggestions, f"Missing field '{field}' in response for {image_file}"
