@@ -2,10 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import '../App.css'
 
-export const AI_API_URL_KEY = 'craftroom.aiApiUrl'
-export const AI_PROMPT_KEY = 'craftroom.aiPrompt'
-
-const DEFAULT_AI_PROMPT = 'Analyze this stamp image and return a JSON object with these exact keys: product_name, brand_name, product_type, theme, shape_descriptor, sentiments. Use null for unknown fields. Return ONLY valid JSON, no markdown, no explanation.'
+export const AI_API_URL_KEY = 'craftroom_ai_api_url'
+export const AI_PROMPT_KEY = 'craftroom_ai_prompt'
 
 const emptyLocationForm = {
   cabinet: '',
@@ -24,12 +22,20 @@ function Settings() {
   const [editingLocationId, setEditingLocationId] = useState(null)
   const [locationsLoading, setLocationsLoading] = useState(true)
   const [locationError, setLocationError] = useState(null)
-  const [aiApiUrl, setAiApiUrl] = useState(() => localStorage.getItem(AI_API_URL_KEY) || '')
-  const [aiPrompt, setAiPrompt] = useState(() => localStorage.getItem(AI_PROMPT_KEY) || '')
-  const [saved, setSaved] = useState(false)
+  
+  // Config state from backend
+  const [config, setConfig] = useState(null)
+  const [configLoading, setConfigLoading] = useState(true)
+  const [configSaved, setConfigSaved] = useState(false)
+  
+  // AI config form
+  const [aiApiUrl, setAiApiUrl] = useState('')
+  const [aiModel, setAiModel] = useState('qwen3.6:35B')
+  const [aiPrompt, setAiPrompt] = useState('')
 
   useEffect(() => {
     fetchLocations()
+    fetchConfig()
   }, [])
 
   const fetchLocations = async () => {
@@ -44,6 +50,23 @@ function Settings() {
       setLocationError(err.message)
     } finally {
       setLocationsLoading(false)
+    }
+  }
+
+  const fetchConfig = async () => {
+    setConfigLoading(true)
+    try {
+      const response = await fetch('/api/config')
+      if (!response.ok) throw new Error('Failed to load configuration')
+      const data = await response.json()
+      setConfig(data)
+      setAiApiUrl(data.ai?.api_url || '')
+      setAiModel(data.ai?.model || 'qwen3.6:35B')
+      setAiPrompt(data.ai?.prompt || '')
+    } catch (err) {
+      console.error('Error loading config:', err)
+    } finally {
+      setConfigLoading(false)
     }
   }
 
@@ -103,26 +126,48 @@ function Settings() {
     setLocationError(null)
   }
 
-  const handleAiSubmit = (e) => {
+  const handleConfigSubmit = async (e) => {
     e.preventDefault()
+    try {
+      const response = await fetch('/api/config/ai', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          api_url: aiApiUrl.trim(),
+          model: aiModel.trim(),
+          prompt: aiPrompt.trim(),
+        }),
+      })
 
-    const trimmedUrl = aiApiUrl.trim()
-    const trimmedPrompt = aiPrompt.trim()
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Failed to save configuration')
+      }
 
-    if (trimmedUrl) localStorage.setItem(AI_API_URL_KEY, trimmedUrl)
-    else localStorage.removeItem(AI_API_URL_KEY)
-
-    if (trimmedPrompt) localStorage.setItem(AI_PROMPT_KEY, trimmedPrompt)
-    else localStorage.removeItem(AI_PROMPT_KEY)
-
-    setAiApiUrl(trimmedUrl)
-    setAiPrompt(trimmedPrompt)
-    setSaved(true)
+      setConfigSaved(true)
+      setTimeout(() => setConfigSaved(false), 3000)
+    } catch (err) {
+      console.error('Error saving config:', err)
+      alert('Failed to save configuration: ' + err.message)
+    }
   }
 
   const handleResetPrompt = () => {
-    setAiPrompt(DEFAULT_AI_PROMPT)
-    setSaved(false)
+    setAiPrompt('Analyze this stamp image and return a JSON object with these exact keys: product_name, brand_name, product_type, theme, shape_descriptor, sentiments. Use null for unknown fields. Return ONLY valid JSON, no markdown, no explanation.')
+  }
+
+  if (configLoading) {
+    return (
+      <div className="detail-view settings-view">
+        <div className="detail-header">
+          <div>
+            <h1>Configuration</h1>
+          </div>
+          <Link to="/" className="btn btn-secondary">Back</Link>
+        </div>
+        <div className="loading">Loading configuration...</div>
+      </div>
+    )
   }
 
   return (
@@ -130,7 +175,7 @@ function Settings() {
       <div className="detail-header">
         <div>
           <h1>Configuration</h1>
-          <p className="settings-subtitle">Configure image analysis for this browser.</p>
+          <p className="settings-subtitle">Manage application settings and AI configuration.</p>
         </div>
         <Link to="/" className="btn btn-secondary">Back</Link>
       </div>
@@ -229,12 +274,10 @@ function Settings() {
       )}
 
       {activeTab === 'ai' && (
-        <form onSubmit={handleAiSubmit}>
+        <form onSubmit={handleConfigSubmit}>
           <div className="settings-section">
-            <h2>Local AI Instance</h2>
-            <p>
-              Use your local Ollama or OpenAI-compatible server. Leave blank to use the backend `.env` setting.
-            </p>
+            <h2>AI Server Configuration</h2>
+            <p>Configure the AI server for image analysis. Settings are saved to config/config.yaml.</p>
             <div className="form-group">
               <label>AI Server URL</label>
               <input
@@ -242,38 +285,50 @@ function Settings() {
                 value={aiApiUrl}
                 onChange={(e) => {
                   setAiApiUrl(e.target.value)
-                  setSaved(false)
+                  setConfigSaved(false)
                 }}
-                placeholder="http://localhost:11434"
+                placeholder="http://localhost:11434/v1"
+              />
+            </div>
+            <div className="form-group">
+              <label>Model</label>
+              <input
+                type="text"
+                value={aiModel}
+                onChange={(e) => {
+                  setAiModel(e.target.value)
+                  setConfigSaved(false)
+                }}
+                placeholder="qwen3.6:35B"
               />
             </div>
           </div>
 
           <div className="settings-section">
-            <h2>Custom AI Prompt</h2>
-            <p>Leave blank to use the backend default prompt.</p>
+            <h2>AI Prompt</h2>
+            <p>Configure the prompt used for image analysis. This is saved to config/config.yaml.</p>
             <div className="form-group">
               <label>Prompt</label>
               <textarea
                 value={aiPrompt}
                 onChange={(e) => {
                   setAiPrompt(e.target.value)
-                  setSaved(false)
+                  setConfigSaved(false)
                 }}
                 rows="8"
-                placeholder={DEFAULT_AI_PROMPT}
+                placeholder="Analyze this stamp image and return a JSON object..."
               />
             </div>
             <button type="button" className="btn btn-secondary" onClick={handleResetPrompt}>
-              Use Suggested Prompt
+              Use Default Prompt
             </button>
           </div>
 
           <div className="form-actions">
-            <button type="submit" className="btn btn-primary">Save Settings</button>
+            <button type="submit" className="btn btn-primary">Save Configuration</button>
             <Link to="/" className="btn btn-secondary">Cancel</Link>
           </div>
-          {saved && <div className="settings-saved">Settings saved.</div>}
+          {configSaved && <div className="settings-saved">Configuration saved to config/config.yaml</div>}
         </form>
       )}
     </div>

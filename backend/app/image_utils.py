@@ -3,20 +3,20 @@ import uuid
 import subprocess
 import shutil
 import logging
-from typing import Optional
+from pathlib import Path
+
+from app.config import get_upload_dir
 
 logger = logging.getLogger("craftroom")
 
-_BACKEND_DIR = os.path.dirname(os.path.dirname(__file__))
-_upload_dir = os.getenv("UPLOAD_DIR", "data/uploads")
-UPLOAD_DIR = _upload_dir if os.path.isabs(_upload_dir) else os.path.join(_BACKEND_DIR, _upload_dir)
+UPLOAD_DIR = get_upload_dir()
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 MAX_FILE_SIZE = 1_000_000  # 1 MB target
 
 
-def validate_image_file(file) -> Optional[str]:
+def validate_image_file(file) -> str | None:
     """Validate uploaded image file type. Returns the extension or None if invalid."""
     filename = file.filename or ""
     ext = os.path.splitext(filename)[1].lower()
@@ -31,77 +31,55 @@ def generate_safe_filename(original_filename: str) -> str:
 
 
 def resize_image(input_path: str, output_path: str) -> str:
-    """Resize/compress image to <= MAX_FILE_SIZE using ffmpeg, preserving aspect ratio."""
-    # Check current size
-    file_size = os.path.getsize(input_path)
-    logger.debug(f"Image size: {file_size} bytes")
-    
-    if file_size <= MAX_FILE_SIZE:
-        # No resize needed, just copy
-        logger.debug(f"Image under {MAX_FILE_SIZE} bytes, copying as-is")
-        shutil.copy2(input_path, output_path)
+    """Resize image to 2000px wide if larger than MAX_FILE_SIZE, preserving aspect ratio."""
+    input_size = os.path.getsize(input_path)
+    input_size_mb = input_size / 1_000_000
+
+    if input_size <= MAX_FILE_SIZE:
+        logger.info(f"Image {os.path.basename(input_path)}: {input_size_mb:.2f} MB, under 1MB threshold — copying as-is")
+        if os.path.abspath(input_path) != os.path.abspath(output_path):
+            shutil.copy2(input_path, output_path)
         return output_path
 
-    # Get original dimensions
+    if os.path.abspath(input_path) == os.path.abspath(output_path):
+        # In-place resize: write to temp file then replace
+        # Use .resized before extension so ffmpeg can detect output format
+        base, ext = os.path.splitext(output_path)
+        tmp_path = f"{base}.resized{ext}"
+    else:
+        tmp_path = output_path
+
     try:
-        result = subprocess.run(
-            [
-                "ffprobe", "-v", "error",
-                "-select_streams", "v:0",
-                "-show_entries", "stream=width,height,r_frame_rate",
-                "-of", "json",
-                input_path,
-            ],
-            capture_output=True, text=True, timeout=30,
-        )
-        import json
-        probe = json.loads(result.stdout)
-        stream = probe["streams"][0]
-        width = stream["width"]
-        height = stream["height"]
-
-        # Calculate max dimension to keep file <= 1 MB
-        # Start with a reasonable dimension and scale down
-        max_dim = min(width, height)
-        quality = 85
-
-        while max_dim > 50:
-            scale = f"{max_dim}:-1"
-            cmd = [
-                "ffmpeg", "-i", input_path,
-                "-vf", f"scale={scale}",
-                "-q:v", str(quality),
-                "-y",
-                output_path,
-            ]
-            subprocess.run(cmd, capture_output=True, timeout=60)
-
-            new_size = os.path.getsize(output_path)
-            if new_size <= MAX_FILE_SIZE:
-                return output_path
-
-            # Reduce quality first, then dimensions
-            if quality > 10:
-                quality -= 10
-            else:
-                max_dim = max(max_dim // 2, 100)
-
-        # Final fallback: heavy downscale
         cmd = [
             "ffmpeg", "-i", input_path,
-            "-vf", "scale=200:-1",
-            "-q:v", "10",
+            "-vf", "scale=2000:-1",
+            "-update", "1",
             "-y",
-            output_path,
+            tmp_path,
         ]
-        subprocess.run(cmd, capture_output=True, timeout=60)
+        result = subprocess.run(cmd, capture_output=True, timeout=60)
+        if result.returncode != 0:
+            raise RuntimeError(f"ffmpeg failed: {result.stderr.decode()[:200]}")
 
     except FileNotFoundError:
-        # ffmpeg/ffprobe not available — just copy the file
         logger.warning("ffmpeg/ffprobe not found, copying file without resize")
-        shutil.copy2(input_path, output_path)
+        if os.path.abspath(input_path) != os.path.abspath(output_path):
+            shutil.copy2(input_path, output_path)
+        else:
+            shutil.copy2(input_path, tmp_path)
     except Exception as e:
         logger.error(f"Error during image resize: {e}", exc_info=True)
-        shutil.copy2(input_path, output_path)
+        if os.path.abspath(input_path) != os.path.abspath(output_path):
+            shutil.copy2(input_path, output_path)
+        else:
+            shutil.copy2(input_path, tmp_path)
+
+    if tmp_path != output_path and os.path.exists(tmp_path):
+        os.replace(tmp_path, output_path)
+
+    output_size = os.path.getsize(output_path)
+    output_size_mb = output_size / 1_000_000
+    reduction = ((input_size - output_size) / input_size) * 100
+    logger.info(f"Image {os.path.basename(input_path)}: scaled 2000px wide — {input_size_mb:.2f} MB → {output_size_mb:.2f} MB ({reduction:.0f}% reduction)")
 
     return output_path

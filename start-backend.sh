@@ -9,6 +9,17 @@ NC='\033[0m' # No Color
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$SCRIPT_DIR/backend"
+export PROJECT_ROOT="$SCRIPT_DIR"
+
+# Load .env from config/.env
+if [ -f "$PROJECT_ROOT/config/.env" ]; then
+    set -a
+    source "$PROJECT_ROOT/config/.env"
+    set +a
+    echo -e "${GREEN}Loaded environment from config/.env${NC}"
+else
+    echo -e "${YELLOW}Warning: config/.env not found${NC}"
+fi
 
 echo -e "${GREEN}🚀 Starting CraftRoom Product Inventory Backend${NC}"
 
@@ -69,19 +80,8 @@ else
     echo -e "Install with: sudo pacman -S ffmpeg (Arch) or sudo apt-get install ffmpeg (Ubuntu)"
 fi
 
-# Check for .env file
-if [ ! -f ".env" ]; then
-    if [ -f "../.env.example" ]; then
-        echo -e "${YELLOW}Creating .env file from .env.example...${NC}"
-        cp "../.env.example" ".env"
-    elif [ -f ".env.example" ]; then
-        echo -e "${YELLOW}Creating .env file from .env.example...${NC}"
-        cp ".env.example" ".env"
-    fi
-fi
-
 # Ensure uploads directory exists
-mkdir -p uploads
+mkdir -p "$PROJECT_ROOT/backend/data/uploads"
 
 echo -e "${GREEN}Starting server on http://localhost:8000${NC}"
 echo -e "${YELLOW}Press Ctrl+C to stop${NC}"

@@ -420,39 +420,33 @@ async def analyze_image(
 
     ai_api_key = "" if request_ai_api_url else ai_config["api_key"]
 
-    # Save, resize, and process for AI
+    # Save and scale temp file for AI
     temp_path = os.path.join(UPLOAD_DIR, f"temp_ai_{generate_safe_filename(image.filename)}")
-    resized_path = os.path.join(UPLOAD_DIR, f"temp_ai_resized_{generate_safe_filename(image.filename)}")
     contents = await image.read()
     with open(temp_path, "wb") as f:
         f.write(contents)
 
-    # Resize image to <= 1MB before sending to AI
-    resize_image(temp_path, resized_path)
+    # Scale image if > 1MB
+    resize_image(temp_path, temp_path)
 
     try:
         logger.info(f"Calling AI API with model: {ai_config['model']}")
-        suggestions = await call_ai_api(
-            resized_path, temp_path,
-            ai_api_key, effective_ai_api_url, effective_ai_prompt,
-        )
+        suggestions = await call_ai_api(temp_path, ai_api_key, effective_ai_api_url, effective_ai_prompt)
         logger.info(f"AI analysis completed successfully")
         return {"suggestions": suggestions}
     except Exception as e:
         logger.error(f"AI analysis failed: {e}", exc_info=True)
         return {"suggestions": {}, "error": str(e)}
     finally:
-        for cleanup_path in (temp_path, resized_path):
-            if os.path.exists(cleanup_path):
-                try:
-                    os.remove(cleanup_path)
-                except Exception as e:
-                    logger.error(f"Error cleaning up temp AI file: {e}")
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception as e:
+                logger.error(f"Error cleaning up temp AI file: {e}")
 
 
 async def call_ai_api(
     image_path: str,
-    temp_path: Optional[str] = None,
     api_key: str = "",
     ai_api_url: Optional[str] = None,
     ai_prompt: Optional[str] = None,

@@ -353,8 +353,16 @@ def test_ai_analyze_with_real_image(client, monkeypatch):
 
     # Set up AI configuration
     monkeypatch.setenv("AI_API_KEY", "test-key")
-    monkeypatch.setenv("AI_API_URL", "http://framework.gruru.net:11434")
+    monkeypatch.setenv("AI_API_URL", "http://framework.gruru.net:11434/v1")
     monkeypatch.setenv("AI_MODEL", "qwen3.6:35B")
+    monkeypatch.setenv(
+        "AI_PROMPT",
+        "Analyze this stamp image and return a JSON object with these exact keys:\n"
+        "product_name, brand_name, product_type, theme, shape_descriptor, sentiments.\n"
+        "Use null for unknown fields. Example: {\"product_name\": \"Test\", \"brand_name\": null,\n"
+        "\"product_type\": null, \"theme\": null, \"shape_descriptor\": null, \"sentiments\": null}.\n"
+        "Return ONLY valid JSON, no markdown, no explanation.",
+    )
 
     with open(EXAMPLE_IMAGE_PATH, "rb") as f:
         response = client.post(
@@ -375,7 +383,7 @@ def test_ai_analyze_with_mock_response(client, monkeypatch):
     import json
     import asyncio
 
-    async def mock_call_ai_api(image_path, temp_path=None, api_key=None, ai_api_url=None, ai_prompt=None):
+    async def mock_call_ai_api(image_path, api_key=None, ai_api_url=None, ai_prompt=None):
         return {
             "product_name": "Mocked Stamp",
             "brand_name": "Mock Brand",
@@ -415,7 +423,7 @@ def test_ai_analyze_uses_request_configuration(client, monkeypatch):
     """Verify AI settings submitted from the app configuration menu are used."""
     captured = {}
 
-    async def mock_call_ai_api(image_path, temp_path=None, api_key=None, ai_api_url=None, ai_prompt=None):
+    async def mock_call_ai_api(image_path, api_key=None, ai_api_url=None, ai_prompt=None):
         captured["api_key"] = api_key
         captured["ai_api_url"] = ai_api_url
         captured["ai_prompt"] = ai_prompt
@@ -460,7 +468,7 @@ def test_ai_analyze_resizes_large_image(client, monkeypatch):
 
     captured = {}
 
-    async def mock_call_ai_api(image_path, temp_path=None, api_key=None, ai_api_url=None, ai_prompt=None):
+    async def mock_call_ai_api(image_path, api_key=None, ai_api_url=None, ai_prompt=None):
         # Check file size inside the mock (before finally block cleanup removes it)
         captured["size"] = os.path.getsize(image_path)
         captured["path"] = image_path

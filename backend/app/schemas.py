@@ -117,3 +117,10 @@ class AIAnalysisRequest(BaseModel):
     theme: Optional[str] = None
     shape_descriptor: Optional[str] = None
     sentiments: Optional[str] = None
+
+
+class AIConfigUpdate(BaseModel):
+    """Schema for updating AI configuration."""
+    api_url: Optional[str] = ""
+    model: Optional[str] = "qwen3.6:35B"
+    prompt: Optional[str] = ""

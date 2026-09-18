@@ -3,9 +3,16 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-_BASE_DIR = Path(__file__).resolve().parents[2]
-_DB_PATH = _BASE_DIR / "data" / "product.db"
-DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{_DB_PATH}")
+from app.config import get_database_url
+
+DATABASE_URL = get_database_url()
+
+# Extract db path for directory creation and ensure it's absolute
+if "sqlite" in DATABASE_URL:
+    _db_path = DATABASE_URL.replace("sqlite:///", "")
+    if not os.path.isabs(_db_path):
+        _db_path = os.path.join(os.getenv("PROJECT_ROOT", str(Path(__file__).resolve().parents[1])), _db_path)
+    Path(_db_path).parent.mkdir(parents=True, exist_ok=True)
 
 engine = create_engine(
     DATABASE_URL,
