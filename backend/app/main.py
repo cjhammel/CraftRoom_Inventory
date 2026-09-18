@@ -3,21 +3,19 @@ import logging
 import shutil
 from typing import Optional
 from pathlib import Path
-from dotenv import load_dotenv
 
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Query, Form, Request
 
-# Load .env file
-_env_path = Path(__file__).resolve().parents[2] / "config" / ".env"
-if _env_path.exists():
-    load_dotenv(_env_path)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
+from app.config import get_log_dir, get_server_config, get_ai_config
+from app.database import get_db, init_db
+
 # Configure logging
-LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
+LOG_DIR = get_log_dir()
 os.makedirs(LOG_DIR, exist_ok=True)
 LOG_FILE = os.path.join(LOG_DIR, "app.log")
 
@@ -31,7 +29,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("craftroom")
 
-from app.database import get_db, init_db
 from app.models import Stamp
 from app.schemas import (
     AIAnalysisRequest,
@@ -57,8 +54,9 @@ from app.image_utils import validate_image_file, generate_safe_filename, resize_
 
 app = FastAPI(title="CraftRoom Product Inventory")
 
-# CORS
-FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")
+# Server config
+server_config = get_server_config()
+FRONTEND_ORIGIN = server_config["frontend_origin"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[FRONTEND_ORIGIN],
@@ -68,7 +66,6 @@ app.add_middleware(
 )
 
 # Ensure uploads directory exists
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 
@@ -86,7 +83,7 @@ def startup():
     logger.info("Starting CraftRoom Product Inventory backend")
     logger.info(f"Database URL: {os.getenv('DATABASE_URL', 'using default')}")
     logger.info(f"Upload directory: {UPLOAD_DIR}")
-    logger.info(f"AI API URL: {os.getenv('AI_API_URL', 'using default')}")
+    logger.info(f"AI API URL: {get_ai_config()['api_url']}")
     init_db()
     logger.info("Database initialized successfully")
 
@@ -399,15 +396,16 @@ async def analyze_image(
     ai_prompt: Optional[str] = Form(None),
 ):
     logger.info(f"AI image analysis requested: {image.filename}")
+    ai_config = get_ai_config()
     request_ai_api_url = ai_api_url.strip() if ai_api_url else ""
-    effective_ai_api_url = request_ai_api_url or (os.getenv("AI_API_URL") or "").strip()
-    effective_ai_prompt = (ai_prompt or os.getenv("AI_PROMPT") or "").strip() or None
+    effective_ai_api_url = request_ai_api_url or (ai_config["api_url"] or "").strip()
+    effective_ai_prompt = (ai_prompt or ai_config["prompt"] or "").strip() or None
     if not effective_ai_api_url:
         logger.warning("AI analysis requested but AI_API_URL not configured")
         raise HTTPException(
             status_code=501,
             detail={
-                "message": "AI service is not configured. Set AI_API_URL in your .env file or the app configuration menu to enable image analysis.",
+                "message": "AI service is not configured. Set AI_API_URL in config/config.yaml to enable image analysis.",
                 "suggestions": {},
             },
         )
@@ -420,33 +418,42 @@ async def analyze_image(
             detail=f"Unsupported image type: .{bad_ext.lstrip('.')}. Supported: jpg, jpeg, png, webp",
         )
 
-    ai_api_key = "" if request_ai_api_url else os.getenv("AI_API_KEY", "")
+    ai_api_key = "" if request_ai_api_url else ai_config["api_key"]
 
-    # Save temporarily for AI processing
+    # Save, resize, and process for AI
     temp_path = os.path.join(UPLOAD_DIR, f"temp_ai_{generate_safe_filename(image.filename)}")
+    resized_path = os.path.join(UPLOAD_DIR, f"temp_ai_resized_{generate_safe_filename(image.filename)}")
     contents = await image.read()
     with open(temp_path, "wb") as f:
         f.write(contents)
 
+    # Resize image to <= 1MB before sending to AI
+    resize_image(temp_path, resized_path)
+
     try:
-        logger.info(f"Calling AI API with model: {os.getenv('AI_MODEL')}")
-        suggestions = await call_ai_api(temp_path, ai_api_key, effective_ai_api_url, effective_ai_prompt)
+        logger.info(f"Calling AI API with model: {ai_config['model']}")
+        suggestions = await call_ai_api(
+            resized_path, temp_path,
+            ai_api_key, effective_ai_api_url, effective_ai_prompt,
+        )
         logger.info(f"AI analysis completed successfully")
         return {"suggestions": suggestions}
     except Exception as e:
         logger.error(f"AI analysis failed: {e}", exc_info=True)
         return {"suggestions": {}, "error": str(e)}
     finally:
-        if os.path.exists(temp_path):
-            try:
-                os.remove(temp_path)
-            except Exception as e:
-                logger.error(f"Error cleaning up temp AI file: {e}")
+        for cleanup_path in (temp_path, resized_path):
+            if os.path.exists(cleanup_path):
+                try:
+                    os.remove(cleanup_path)
+                except Exception as e:
+                    logger.error(f"Error cleaning up temp AI file: {e}")
 
 
 async def call_ai_api(
     image_path: str,
-    api_key: str,
+    temp_path: Optional[str] = None,
+    api_key: str = "",
     ai_api_url: Optional[str] = None,
     ai_prompt: Optional[str] = None,
 ) -> dict:
@@ -457,9 +464,10 @@ async def call_ai_api(
     """
     import httpx
 
-    ai_api_url = ai_api_url or os.getenv("AI_API_URL", "http://example.com:11434")
-    ai_model = os.getenv("AI_MODEL", "qwen3.6:35B")
-    ai_prompt = ai_prompt or os.getenv("AI_PROMPT", "Analyze this stamp image and return a JSON object with these exact keys: product_name, brand_name, product_type, theme, shape_descriptor, sentiments. Use null for unknown fields. Example: {\"product_name\": \"Test\", \"brand_name\": null, \"product_type\": null, \"theme\": null, \"shape_descriptor\": null, \"sentiments\": null}. Return ONLY valid JSON, no markdown, no explanation.")
+    ai_config = get_ai_config()
+    effective_ai_api_url = ai_api_url or ai_config["api_url"]
+    ai_model = ai_config["model"]
+    effective_ai_prompt = ai_prompt or ai_config["prompt"]
 
     logger.info(f"Calling AI API: {ai_api_url} with model {ai_model}")
 
@@ -582,6 +590,29 @@ async def call_ai_api(
             suggestions = {}
 
     return suggestions
+
+
+# --- Configuration endpoints ---
+
+from app.config import get_full_config, save_ai_config
+from app.schemas import AIConfigUpdate
+
+
+@app.get("/api/config")
+def get_config():
+    """Get full configuration from config.yaml."""
+    return get_full_config()
+
+
+@app.put("/api/config/ai")
+def update_ai_config(data: AIConfigUpdate):
+    """Update AI configuration in config.yaml."""
+    try:
+        save_ai_config(data.api_url or "", data.model or "qwen3.6:35B", data.prompt or "")
+        return {"detail": "AI configuration updated successfully"}
+    except Exception as e:
+        logger.error(f"Error updating AI config: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to update configuration: {str(e)}")
 
 
 # Serve uploaded images via static mount — already handled by app.mount above

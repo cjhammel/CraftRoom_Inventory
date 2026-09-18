@@ -255,6 +255,11 @@ def test_ai_analyze_not_configured(client, monkeypatch):
     monkeypatch.delenv("AI_API_KEY", raising=False)
     monkeypatch.delenv("AI_MODEL", raising=False)
     monkeypatch.delenv("AI_PROMPT", raising=False)
+
+    # Monkeypatch get_ai_config at the point of use (main.py imports it directly)
+    from app import main as main_module
+    monkeypatch.setattr(main_module, "get_ai_config", lambda: {"api_url": "", "api_key": "", "model": "", "prompt": ""})
+
     response = client.post(
         "/ai/analyze-image",
         files={"image": ("test.png", b"fake image data", "image/png")},
@@ -268,7 +273,7 @@ def test_ai_analyze_not_configured(client, monkeypatch):
 # --- Image upload and AI tests ---
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-EXAMPLE_IMAGE_PATH = os.path.join(PROJECT_ROOT, "example_image", "Testimage1.jpg")
+EXAMPLE_IMAGE_PATH = os.path.join(PROJECT_ROOT, "example_image", "Testimage3.jpg")
 
 
 def test_image_upload_and_resize(client):
@@ -295,20 +300,21 @@ def test_image_upload_and_resize(client):
 
     # Check the saved file size
     image_filename = os.path.basename(body["image_url"])
-    saved_path = os.path.join(os.path.dirname(__file__), "uploads", image_filename)
+    # Check in the data/uploads directory (current config path)
+    saved_path = os.path.join(os.path.dirname(__file__), "data", "uploads", image_filename)
+    if not os.path.exists(saved_path):
+        # Fallback to legacy uploads directory
+        saved_path = os.path.join(os.path.dirname(__file__), "uploads", image_filename)
+    if not os.path.exists(saved_path):
+        # Fallback to parent uploads directory
+        saved_path = os.path.join(os.path.dirname(__file__), "..", "uploads", image_filename)
 
-    if os.path.exists(saved_path):
-        saved_size = os.path.getsize(saved_path)
-        assert saved_size <= 1_000_000, f"Saved image size {saved_size} bytes exceeds 1MB limit"
-        # If original was larger, it should have been compressed
-        if original_size > 1_000_000:
-            assert saved_size < original_size, "Image was not compressed"
-    else:
-        # File might be in the parent uploads directory
-        parent_saved_path = os.path.join(os.path.dirname(__file__), "..", "uploads", image_filename)
-        if os.path.exists(parent_saved_path):
-            saved_size = os.path.getsize(parent_saved_path)
-            assert saved_size <= 1_000_000, f"Saved image size {saved_size} bytes exceeds 1MB limit"
+    assert os.path.exists(saved_path), f"Saved image not found at any expected path (checked data/uploads/, uploads/, ../uploads/)"
+    saved_size = os.path.getsize(saved_path)
+    assert saved_size <= 1_000_000, f"Saved image size {saved_size:,} bytes exceeds 1MB limit"
+    # Testimage3.jpg is ~5.8MB, so it should have been compressed significantly
+    assert original_size > 1_000_000
+    assert saved_size < original_size, f"Large image was not compressed (was {original_size:,}, now {saved_size:,})"
 
 
 def test_image_upload_preserves_small_images(client):
@@ -369,7 +375,7 @@ def test_ai_analyze_with_mock_response(client, monkeypatch):
     import json
     import asyncio
 
-    async def mock_call_ai_api(image_path, api_key, ai_api_url=None, ai_prompt=None):
+    async def mock_call_ai_api(image_path, temp_path=None, api_key=None, ai_api_url=None, ai_prompt=None):
         return {
             "product_name": "Mocked Stamp",
             "brand_name": "Mock Brand",
@@ -409,10 +415,12 @@ def test_ai_analyze_uses_request_configuration(client, monkeypatch):
     """Verify AI settings submitted from the app configuration menu are used."""
     captured = {}
 
-    async def mock_call_ai_api(image_path, api_key, ai_api_url=None, ai_prompt=None):
+    async def mock_call_ai_api(image_path, temp_path=None, api_key=None, ai_api_url=None, ai_prompt=None):
         captured["api_key"] = api_key
         captured["ai_api_url"] = ai_api_url
         captured["ai_prompt"] = ai_prompt
+        # Verify the image was resized before being passed to AI
+        assert os.path.getsize(image_path) <= 1_000_000, f"Image sent to AI exceeds 1MB: {os.path.getsize(image_path)}"
         return {"product_name": "Configured Stamp"}
 
     from app import main
@@ -443,3 +451,36 @@ def test_ai_analyze_uses_request_configuration(client, monkeypatch):
     assert captured["api_key"] == ""
     assert captured["ai_api_url"] == "http://localhost:11434"
     assert captured["ai_prompt"] == "Return stamp metadata as JSON."
+
+
+def test_ai_analyze_resizes_large_image(client, monkeypatch):
+    """Verify that large images sent to AI analysis are resized to <= 1MB."""
+    if not os.path.exists(EXAMPLE_IMAGE_PATH):
+        pytest.skip(f"Example image not found at {EXAMPLE_IMAGE_PATH}")
+
+    captured = {}
+
+    async def mock_call_ai_api(image_path, temp_path=None, api_key=None, ai_api_url=None, ai_prompt=None):
+        # Check file size inside the mock (before finally block cleanup removes it)
+        captured["size"] = os.path.getsize(image_path)
+        captured["path"] = image_path
+        return {"product_name": "Resized AI Test", "brand_name": "Test"}
+
+    from app import main
+    monkeypatch.setattr(main, "call_ai_api", mock_call_ai_api)
+    monkeypatch.delenv("AI_API_URL", raising=False)
+    monkeypatch.setenv("AI_API_KEY", "test-key")
+
+    original_size = os.path.getsize(EXAMPLE_IMAGE_PATH)
+    assert original_size > 1_000_000, f"Test image should be >1MB for this test, got {original_size:,} bytes"
+
+    with open(EXAMPLE_IMAGE_PATH, "rb") as f:
+        response = client.post(
+            "/ai/analyze-image",
+            files={"image": ("large_test.jpg", f, "image/jpeg")},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["suggestions"]["product_name"] == "Resized AI Test"
+    assert captured["size"] <= 1_000_000, f"Image sent to AI was not resized: {captured['size']:,} bytes"
