@@ -20,7 +20,7 @@ frontend/dist/
 *.db
 data/uploads/
 !data/uploads/.gitkeep
-data/stamps.db
+data/product.db
 
 # IDE
 .vscode/
