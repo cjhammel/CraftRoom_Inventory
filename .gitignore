@@ -18,9 +18,8 @@ frontend/dist/
 
 # Database
 *.db
-data/uploads/
-!data/uploads/.gitkeep
-data/product.db
+backend/data/
+!backend/data/.gitkeep
 
 # IDE
 .vscode/
